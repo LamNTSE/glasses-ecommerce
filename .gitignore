@@ -1,4 +1,6 @@
-# Ignore Visual Studio and IDE files
+############################
+# Visual Studio
+############################
 .vs/
 .idea/
 .vscode/
@@ -6,40 +8,37 @@
 *.user
 *.userosscache
 *.sln.docstates
+*.csproj.user
 
-# Build outputs
+############################
+# Build
+############################
 **/bin/
 **/obj/
-OpticalStoreBE/**/bin/
-OpticalStoreBE/**/obj/
 
-# Publish output
-publish/
-*/publish/
-
-# Runtime files and artifacts
+############################
+# Runtime
+############################
 *.dll
 *.exe
 *.pdb
-*.runtimeconfig.json
-*.deps.json
-*.staticwebassets.endpoints.json
+*.cache
+*.vsidx
 
-# Local project/user settings and secrets
-**/appsettings.Development.json
-**/secrets.json
-OpticalStore.API/OpticalStore.API.csproj.user
+############################
+# App Secrets
+############################
+appsettings.Development.json
+secrets.json
+*.env
 
-# Logs, databases, test results
+############################
+# Logs
+############################
 *.log
-*.sqlite
-*.db
-TestResults/
-coverage/
 
-# Misc
+############################
+# OS
+############################
 Thumbs.db
 .DS_Store
-*.env
-/OpticalStoreBE/OpticalStore.BLL/obj
-/OpticalStoreBE/OpticalStore.API/obj
