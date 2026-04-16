@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpticalStore.DAL.Entities;
+using OpticalStore.DAL.Entities.Enums;
 
 namespace OpticalStore.DAL.DBContext
 {
@@ -20,42 +21,55 @@ namespace OpticalStore.DAL.DBContext
             // Users
             modelBuilder.Entity<User>(b =>
             {
-                b.ToTable("Users");
+                b.ToTable("Users", tb =>
+                {
+                    tb.HasCheckConstraint("CK_Users_Status", $"[Status] IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
+                });
                 b.HasKey(x => x.Id);
-                b.Property(x => x.FullName).HasMaxLength(150).IsRequired();
-                b.Property(x => x.Email).HasColumnType("varchar(255)").IsRequired();
+                b.Property(x => x.Id).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.Dob).HasColumnType("date");
+                b.Property(x => x.Email).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
+                b.Property(x => x.LastName).HasMaxLength(100).IsRequired();
+                b.Property(x => x.Username).HasMaxLength(100).IsRequired();
+                b.Property(x => x.Password).HasColumnType("nvarchar(255)").IsRequired();
                 b.Property(x => x.Phone).HasColumnType("varchar(20)");
-                b.Property(x => x.PasswordHash).HasMaxLength(255).IsRequired();
-                b.Property(x => x.Address).HasMaxLength(300);
-                b.Property(x => x.DateOfBirth).HasColumnType("date");
-                b.Property(x => x.Role).HasColumnType("varchar(50)").IsRequired();
+                b.Property(x => x.ImageUrl).HasMaxLength(500);
+                b.Property(x => x.Status).HasColumnType("varchar(20)").IsRequired();
                 b.Property(x => x.RefreshToken).HasMaxLength(500);
                 b.Property(x => x.RefreshTokenExpiryTime).HasColumnType("datetime2");
 
-                b.Property(x => x.IsDeleted).HasDefaultValue(false);
-                b.Property(x => x.CreatedAt).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");
-
-                b.HasIndex(x => x.Email).IsUnique().HasDatabaseName("UX_Users_Email_Active").HasFilter("[IsDeleted] = 0");
-                b.HasIndex(x => x.Phone).IsUnique().HasDatabaseName("UX_Users_Phone_Active").HasFilter("[Phone] IS NOT NULL AND [IsDeleted] = 0");
-
-                b.HasQueryFilter(x => !x.IsDeleted);
+                b.HasIndex(x => x.Email).IsUnique().HasDatabaseName("UX_Users_Email");
+                b.HasIndex(x => x.Username).IsUnique().HasDatabaseName("UX_Users_Username");
+                b.HasIndex(x => x.Phone).IsUnique().HasDatabaseName("UX_Users_Phone").HasFilter("[Phone] IS NOT NULL");
             });
 
             // Products
             modelBuilder.Entity<Product>(b =>
             {
-                b.ToTable("Products");
+                b.ToTable("Products", tb =>
+                {
+                    tb.HasCheckConstraint(
+                        "CK_Products_Category",
+                        $"[Category] IN ('{ProductCategoryValues.Frame}','{ProductCategoryValues.Lens}','{ProductCategoryValues.Accessory}')");
+                    tb.HasCheckConstraint("CK_Products_Status", $"[Status] IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
+                });
                 b.HasKey(x => x.Id);
-                b.Property(x => x.Name).HasMaxLength(200).IsRequired();
-                b.Property(x => x.Description).HasMaxLength(1000);
-                b.Property(x => x.ImageUrl).HasMaxLength(500);
-                b.Property(x => x.BasePrice).HasColumnType("decimal(18,2)").IsRequired();
-                b.Property(x => x.ProductType).HasColumnType("varchar(50)").IsRequired();
+                b.Property(x => x.Id).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.Name).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.Brand).HasMaxLength(150);
+                b.Property(x => x.Category).HasColumnType("varchar(20)").IsRequired();
+                b.Property(x => x.FrameMaterial).HasMaxLength(100);
+                b.Property(x => x.FrameType).HasMaxLength(100);
+                b.Property(x => x.Gender).HasColumnType("varchar(20)");
+                b.Property(x => x.HingeType).HasMaxLength(100);
+                b.Property(x => x.NosePadType).HasMaxLength(100);
+                b.Property(x => x.Shape).HasMaxLength(100);
+                b.Property(x => x.WeightGram).HasColumnType("numeric(6,2)");
+                b.Property(x => x.Status).HasColumnType("varchar(20)").IsRequired();
+                b.Property(x => x.ModelUrl).HasMaxLength(500);
 
                 b.Property(x => x.IsDeleted).HasDefaultValue(false);
-                b.Property(x => x.CreatedAt).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");
-
-                b.HasCheckConstraint("CK_Products_BasePrice", "[BasePrice] >= 0");
 
                 b.HasQueryFilter(x => !x.IsDeleted);
             });
@@ -63,24 +77,32 @@ namespace OpticalStore.DAL.DBContext
             // ProductVariants
             modelBuilder.Entity<ProductVariant>(b =>
             {
-                b.ToTable("ProductVariants");
+                b.ToTable("ProductVariants", tb =>
+                {
+                    tb.HasCheckConstraint("CK_ProductVariants_Price", "[Price] >= 0");
+                    tb.HasCheckConstraint("CK_ProductVariants_Quantity", "[Quantity] >= 0");
+                    tb.HasCheckConstraint("CK_ProductVariants_Status", $"[Status] IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
+                });
                 b.HasKey(x => x.Id);
-                b.Property(x => x.VariantType).HasMaxLength(100);
-                b.Property(x => x.Color).HasMaxLength(50);
-                b.Property(x => x.Size).HasColumnType("varchar(20)");
-                b.Property(x => x.Material).HasMaxLength(100);
-
-                b.Property(x => x.PriceAdjust).HasColumnType("decimal(18,2)").HasDefaultValue(0);
+                b.Property(x => x.Id).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.ProductId).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.ColorName).HasMaxLength(100);
+                b.Property(x => x.SizeLabel).HasMaxLength(50);
+                b.Property(x => x.BridgeWidthMm).HasColumnType("numeric(6,2)");
+                b.Property(x => x.LensWidthMm).HasColumnType("numeric(6,2)");
+                b.Property(x => x.TempleLengthMm).HasColumnType("numeric(6,2)");
+                b.Property(x => x.FrameFinish).HasMaxLength(100);
+                b.Property(x => x.Price).HasColumnType("numeric(12,2)").IsRequired();
                 b.Property(x => x.Quantity).HasDefaultValue(0);
-                b.Property(x => x.IsAvailable).HasDefaultValue(true);
-                b.Property(x => x.CreatedAt).HasColumnType("datetime2(0)").HasDefaultValueSql("SYSUTCDATETIME()");
+                b.Property(x => x.Status).HasColumnType("varchar(20)").IsRequired();
+                b.Property(x => x.IsDeleted).HasDefaultValue(false);
+                b.Property(x => x.OrderItemType).HasMaxLength(100).IsRequired();
 
                 b.HasOne(x => x.Product).WithMany(p => p.ProductVariants).HasForeignKey(x => x.ProductId).HasConstraintName("FK_ProductVariants_Products");
 
                 b.HasIndex(x => x.ProductId).HasDatabaseName("IX_ProductVariants_ProductId");
 
-                b.HasCheckConstraint("CK_ProductVariants_PriceAdjust", "[PriceAdjust] >= 0");
-                b.HasCheckConstraint("CK_ProductVariants_Quantity", "[Quantity] >= 0");
+                b.HasQueryFilter(x => !x.IsDeleted);
             });
         }
     }

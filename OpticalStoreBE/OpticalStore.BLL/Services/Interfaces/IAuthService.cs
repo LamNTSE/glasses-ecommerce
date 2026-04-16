@@ -8,7 +8,7 @@ namespace OpticalStore.BLL.Services.Interfaces
         Task RegisterAsync(RegisterRequestDto request);
         Task<AuthResultDto> LoginAsync(LoginRequestDto request);
         Task<AuthResultDto> RefreshTokenAsync(string refreshToken);
-        Task RevokeRefreshTokenAsync(long userId);
-        Task<UserDto?> GetCurrentUserAsync(long userId);
+        Task RevokeRefreshTokenAsync(string userId);
+        Task<UserDto?> GetCurrentUserAsync(string userId);
     }
 }

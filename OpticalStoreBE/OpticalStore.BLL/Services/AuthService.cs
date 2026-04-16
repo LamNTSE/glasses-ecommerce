@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using OpticalStore.BLL.DTOs;
 using OpticalStore.BLL.Services.Interfaces;
 using OpticalStore.DAL.Entities;
+using OpticalStore.DAL.Entities.Enums;
 using OpticalStore.DAL.Repositories.Interfaces;
 
 namespace OpticalStore.BLL.Services
@@ -32,17 +33,24 @@ namespace OpticalStore.BLL.Services
                 throw new InvalidOperationException("Email already in use.");
             }
 
+            var existingUsername = await _userRepository.GetByUsernameAsync(request.Username);
+            if (existingUsername != null)
+            {
+                throw new InvalidOperationException("Username already in use.");
+            }
+
             var user = new User
             {
-                FullName = request.FullName,
+                Id = Guid.NewGuid().ToString("D").ToLowerInvariant(),
+                Dob = request.Dob,
                 Email = request.Email,
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                Username = request.Username,
+                Password = BCrypt.Net.BCrypt.HashPassword(request.Password),
                 Phone = request.Phone,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                Address = request.Address,
-                DateOfBirth = request.DateOfBirth,
-                Role = "Customer",
-                IsDeleted = false,
-                CreatedAt = DateTime.UtcNow
+                ImageUrl = request.ImageUrl,
+                Status = StatusValues.Active
             };
 
             await _userRepository.AddAsync(user);
@@ -52,9 +60,14 @@ namespace OpticalStore.BLL.Services
         public async Task<AuthResultDto> LoginAsync(LoginRequestDto request)
         {
             var user = await _userRepository.GetByEmailAsync(request.Email);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
             {
                 throw new UnauthorizedAccessException("Invalid email or password.");
+            }
+
+            if (!string.Equals(user.Status, StatusValues.Active, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new UnauthorizedAccessException("User account is inactive.");
             }
 
             var accessToken = GenerateAccessToken(user);
@@ -92,7 +105,7 @@ namespace OpticalStore.BLL.Services
             return BuildAuthResult(user, newAccessToken, newRefreshToken);
         }
 
-        public async Task RevokeRefreshTokenAsync(long userId)
+        public async Task RevokeRefreshTokenAsync(string userId)
         {
             var user = await _userRepository.GetByIdAsync(userId);
             if (user == null)
@@ -106,7 +119,7 @@ namespace OpticalStore.BLL.Services
             await _userRepository.SaveChangesAsync();
         }
 
-        public async Task<UserDto?> GetCurrentUserAsync(long userId)
+        public async Task<UserDto?> GetCurrentUserAsync(string userId)
         {
             var user = await _userRepository.GetByIdAsync(userId);
             if (user == null)
@@ -117,9 +130,14 @@ namespace OpticalStore.BLL.Services
             return new UserDto
             {
                 Id = user.Id,
+                Dob = user.Dob,
                 Email = user.Email,
-                FullName = user.FullName,
-                Role = user.Role
+                FirstName = user.FirstName,
+                LastName = user.LastName,
+                Username = user.Username,
+                Phone = user.Phone,
+                ImageUrl = user.ImageUrl,
+                Status = user.Status
             };
         }
 
@@ -133,9 +151,14 @@ namespace OpticalStore.BLL.Services
                 User = new UserDto
                 {
                     Id = user.Id,
+                    Dob = user.Dob,
                     Email = user.Email,
-                    FullName = user.FullName,
-                    Role = user.Role
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Username = user.Username,
+                    Phone = user.Phone,
+                    ImageUrl = user.ImageUrl,
+                    Status = user.Status
                 }
             };
         }
@@ -147,10 +170,10 @@ namespace OpticalStore.BLL.Services
 
             var claims = new[]
             {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
-                new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
+                new Claim(ClaimTypes.NameIdentifier, user.Id),
                 new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(ClaimTypes.Role, user.Role)
+                new Claim(ClaimTypes.Name, user.Username)
             };
 
             var token = new JwtSecurityToken(

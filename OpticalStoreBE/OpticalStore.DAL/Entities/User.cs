@@ -4,20 +4,18 @@ namespace OpticalStore.DAL.Entities
 {
     public class User
     {
-        public long Id { get; set; }
-        public string FullName { get; set; } = null!;
+        public string Id { get; set; } = null!;
+        public DateTime? Dob { get; set; }
         public string Email { get; set; } = null!;
+        public string FirstName { get; set; } = null!;
+        public string LastName { get; set; } = null!;
+        public string Username { get; set; } = null!;
+        public string Password { get; set; } = null!;
         public string? Phone { get; set; }
-        public string PasswordHash { get; set; } = null!;
-
-        public string? Address { get; set; }
-        public DateTime? DateOfBirth { get; set; }
-        public string Role { get; set; } = null!;
+        public string? ImageUrl { get; set; }
+        public string Status { get; set; } = null!;
 
         public string? RefreshToken { get; set; }
         public DateTime? RefreshTokenExpiryTime { get; set; }
-
-        public bool IsDeleted { get; set; }
-        public DateTime CreatedAt { get; set; }
     }
 }

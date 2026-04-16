@@ -4,19 +4,21 @@ namespace OpticalStore.DAL.Entities
 {
     public class ProductVariant
     {
-        public long Id { get; set; }
-        public long ProductId { get; set; }
+        public string Id { get; set; } = null!;
+        public string ProductId { get; set; } = null!;
 
-        public string? VariantType { get; set; }
-        public string? Color { get; set; }
-        public string? Size { get; set; }
-        public string? Material { get; set; }
+        public string? ColorName { get; set; }
+        public string? SizeLabel { get; set; }
+        public decimal? BridgeWidthMm { get; set; }
+        public decimal? LensWidthMm { get; set; }
+        public decimal? TempleLengthMm { get; set; }
+        public string? FrameFinish { get; set; }
 
-        public decimal PriceAdjust { get; set; }
+        public decimal Price { get; set; }
         public int Quantity { get; set; }
-        public bool IsAvailable { get; set; }
-
-        public DateTime CreatedAt { get; set; }
+        public string Status { get; set; } = null!;
+        public bool IsDeleted { get; set; }
+        public string OrderItemType { get; set; } = null!;
 
         public Product? Product { get; set; }
     }

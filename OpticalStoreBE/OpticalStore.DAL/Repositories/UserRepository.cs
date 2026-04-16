@@ -18,7 +18,12 @@ namespace OpticalStore.DAL.Repositories
 
         public async Task<User?> GetByEmailAsync(string email)
         {
-            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == email && !u.IsDeleted);
+            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Email == email);
+        }
+
+        public async Task<User?> GetByUsernameAsync(string username)
+        {
+            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Username == username);
         }
 
         public async Task<User?> GetByRefreshTokenAsync(string refreshToken)
@@ -26,13 +31,12 @@ namespace OpticalStore.DAL.Repositories
             return await _dbContext.Users.FirstOrDefaultAsync(u =>
                 u.RefreshToken == refreshToken &&
                 u.RefreshTokenExpiryTime != null &&
-                u.RefreshTokenExpiryTime > DateTime.UtcNow &&
-                !u.IsDeleted);
+                u.RefreshTokenExpiryTime > DateTime.UtcNow);
         }
 
-        public async Task<User?> GetByIdAsync(long id)
+        public async Task<User?> GetByIdAsync(string id)
         {
-            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id && !u.IsDeleted);
+            return await _dbContext.Users.FirstOrDefaultAsync(u => u.Id == id);
         }
 
         public async Task AddAsync(User user)

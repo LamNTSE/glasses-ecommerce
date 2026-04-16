@@ -52,12 +52,12 @@ namespace OpticalStore.API.Controllers
         public async Task<IActionResult> Logout()
         {
             var userId = GetCurrentUserId();
-            if (userId == null)
+            if (string.IsNullOrWhiteSpace(userId))
             {
                 return Unauthorized();
             }
 
-            await _authService.RevokeRefreshTokenAsync(userId.Value);
+            await _authService.RevokeRefreshTokenAsync(userId);
             return Ok();
         }
 
@@ -66,12 +66,12 @@ namespace OpticalStore.API.Controllers
         public async Task<ActionResult<UserResponse?>> Me()
         {
             var userId = GetCurrentUserId();
-            if (userId == null)
+            if (string.IsNullOrWhiteSpace(userId))
             {
                 return Unauthorized();
             }
 
-            var currentUser = await _authService.GetCurrentUserAsync(userId.Value);
+            var currentUser = await _authService.GetCurrentUserAsync(userId);
             if (currentUser == null)
             {
                 return NotFound();
@@ -80,13 +80,13 @@ namespace OpticalStore.API.Controllers
             return Ok(_mapper.Map<UserResponse>(currentUser));
         }
 
-        private long? GetCurrentUserId()
+        private string? GetCurrentUserId()
         {
             var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
                 ?? User.FindFirstValue(ClaimTypes.Name)
                 ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
 
-            return long.TryParse(sub, out var userId) ? userId : null;
+            return string.IsNullOrWhiteSpace(sub) ? null : sub;
         }
 
     }
