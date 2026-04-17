@@ -1,0 +1,134 @@
+using System.Net;
+using Microsoft.EntityFrameworkCore;
+using OpticalStore.BLL.DTOs.Notifications;
+using OpticalStore.BLL.Exceptions;
+using OpticalStore.BLL.Services.Interfaces;
+using OpticalStore.DAL.DBContext;
+using OpticalStore.DAL.Entities;
+
+namespace OpticalStore.BLL.Services;
+
+public sealed class NotificationService : INotificationService
+{
+    private readonly OpticalStoreDbContext _dbContext;
+    private readonly INotificationStreamService _notificationStreamService;
+
+    public NotificationService(OpticalStoreDbContext dbContext, INotificationStreamService notificationStreamService)
+    {
+        _dbContext = dbContext;
+        _notificationStreamService = notificationStreamService;
+    }
+
+    public async Task<NotificationResponseDto> CreateAsync(string senderId, CreateNotificationDto request, CancellationToken cancellationToken = default)
+    {
+        var recipient = await _dbContext.Users.FirstOrDefaultAsync(x => x.Id == request.RecipientId, cancellationToken);
+        if (recipient is null)
+        {
+            throw new AppException("USER_NOT_EXISTED", "Recipient user not found.", HttpStatusCode.NotFound);
+        }
+
+        var notification = new Notification
+        {
+            Id = Guid.NewGuid().ToString(),
+            RecipientId = recipient.Id,
+            SenderId = string.IsNullOrWhiteSpace(senderId) ? "SYSTEM" : senderId,
+            Title = request.Title.Trim(),
+            Content = request.Content.Trim(),
+            IsRead = false,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _dbContext.Notifications.Add(notification);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        notification.Recipient = recipient;
+        var result = Map(notification);
+        await _notificationStreamService.PublishAsync(notification.RecipientId, result, cancellationToken);
+
+        return result;
+    }
+
+    public async Task<List<NotificationResponseDto>> GetMyNotificationsAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        var data = await _dbContext.Notifications
+            .Include(x => x.Recipient)
+            .Where(x => x.RecipientId == userId)
+            .OrderByDescending(x => x.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return data.Select(Map).ToList();
+    }
+
+    public Task<long> GetMyUnreadCountAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        return _dbContext.Notifications.LongCountAsync(x => x.RecipientId == userId && !x.IsRead, cancellationToken);
+    }
+
+    public async Task<NotificationResponseDto> MarkAsReadAsync(string userId, string notificationId, CancellationToken cancellationToken = default)
+    {
+        var notification = await _dbContext.Notifications
+            .Include(x => x.Recipient)
+            .FirstOrDefaultAsync(x => x.Id == notificationId && x.RecipientId == userId, cancellationToken);
+
+        if (notification is null)
+        {
+            throw new AppException("NOTIFICATION_NOT_FOUND", "Notification not found.", HttpStatusCode.NotFound);
+        }
+
+        if (!notification.IsRead)
+        {
+            notification.IsRead = true;
+            notification.ReadAt = DateTime.UtcNow;
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        var result = Map(notification);
+        await _notificationStreamService.PublishAsync(userId, result, cancellationToken);
+        return result;
+    }
+
+    public async Task<int> MarkAllAsReadAsync(string userId, CancellationToken cancellationToken = default)
+    {
+        var notifications = await _dbContext.Notifications
+            .Include(x => x.Recipient)
+            .Where(x => x.RecipientId == userId && !x.IsRead)
+            .ToListAsync(cancellationToken);
+
+        if (notifications.Count == 0)
+        {
+            return 0;
+        }
+
+        var now = DateTime.UtcNow;
+        foreach (var notification in notifications)
+        {
+            notification.IsRead = true;
+            notification.ReadAt = now;
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        foreach (var notification in notifications)
+        {
+            await _notificationStreamService.PublishAsync(userId, Map(notification), cancellationToken);
+        }
+
+        return notifications.Count;
+    }
+
+    private static NotificationResponseDto Map(Notification notification)
+    {
+        return new NotificationResponseDto
+        {
+            Id = notification.Id,
+            RecipientId = notification.RecipientId,
+            RecipientName = notification.Recipient?.Username,
+            Title = notification.Title,
+            Content = notification.Content,
+            SenderId = notification.SenderId,
+            IsRead = notification.IsRead,
+            CreatedAt = notification.CreatedAt,
+            ReadAt = notification.ReadAt
+        };
+    }
+}

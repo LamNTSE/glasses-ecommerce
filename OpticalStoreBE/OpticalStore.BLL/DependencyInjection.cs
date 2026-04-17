@@ -20,6 +20,10 @@ public static class DependencyInjection
         services.AddScoped<ILensService, LensService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IProductVariantService, ProductVariantService>();
+        services.AddScoped<IPolicyService, PolicyService>();
+        services.AddScoped<INotificationService, NotificationService>();
+        services.AddScoped<IDashboardService, DashboardService>();
+        services.AddSingleton<INotificationStreamService, NotificationStreamService>();
 
         return services;
     }
