@@ -12,7 +12,7 @@ namespace OpticalStore.DAL
         public static IServiceCollection AddDalServices(this IServiceCollection services, IConfiguration configuration)
         {
             services.AddDbContext<OpticalStoreDbContext>(options =>
-                options.UseSqlServer(configuration.GetConnectionString("DefaultConnection")));
+                options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
             services.AddScoped<IUserRepository, UserRepository>();
             services.AddScoped<IProductRepository, ProductRepository>();

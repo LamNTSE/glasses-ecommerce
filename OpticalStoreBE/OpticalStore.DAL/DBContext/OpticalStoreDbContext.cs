@@ -23,25 +23,25 @@ namespace OpticalStore.DAL.DBContext
             {
                 b.ToTable("Users", tb =>
                 {
-                    tb.HasCheckConstraint("CK_Users_Status", $"[Status] IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
+                    tb.HasCheckConstraint("CK_Users_Status", $"\"Status\" IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
                 });
                 b.HasKey(x => x.Id);
-                b.Property(x => x.Id).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.Id).HasMaxLength(255).IsRequired();
                 b.Property(x => x.Dob).HasColumnType("date");
-                b.Property(x => x.Email).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.Email).HasMaxLength(255).IsRequired();
                 b.Property(x => x.FirstName).HasMaxLength(100).IsRequired();
                 b.Property(x => x.LastName).HasMaxLength(100).IsRequired();
                 b.Property(x => x.Username).HasMaxLength(100).IsRequired();
-                b.Property(x => x.Password).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.Password).HasMaxLength(255).IsRequired();
                 b.Property(x => x.Phone).HasColumnType("varchar(20)");
                 b.Property(x => x.ImageUrl).HasMaxLength(500);
                 b.Property(x => x.Status).HasColumnType("varchar(20)").IsRequired();
                 b.Property(x => x.RefreshToken).HasMaxLength(500);
-                b.Property(x => x.RefreshTokenExpiryTime).HasColumnType("datetime2");
+                b.Property(x => x.RefreshTokenExpiryTime);
 
                 b.HasIndex(x => x.Email).IsUnique().HasDatabaseName("UX_Users_Email");
                 b.HasIndex(x => x.Username).IsUnique().HasDatabaseName("UX_Users_Username");
-                b.HasIndex(x => x.Phone).IsUnique().HasDatabaseName("UX_Users_Phone").HasFilter("[Phone] IS NOT NULL");
+                b.HasIndex(x => x.Phone).IsUnique().HasDatabaseName("UX_Users_Phone").HasFilter("\"Phone\" IS NOT NULL");
             });
 
             // Products
@@ -51,12 +51,12 @@ namespace OpticalStore.DAL.DBContext
                 {
                     tb.HasCheckConstraint(
                         "CK_Products_Category",
-                        $"[Category] IN ('{ProductCategoryValues.Frame}','{ProductCategoryValues.Lens}','{ProductCategoryValues.Accessory}')");
-                    tb.HasCheckConstraint("CK_Products_Status", $"[Status] IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
+                        $"\"Category\" IN ('{ProductCategoryValues.Frame}','{ProductCategoryValues.Lens}','{ProductCategoryValues.Accessory}')");
+                    tb.HasCheckConstraint("CK_Products_Status", $"\"Status\" IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
                 });
                 b.HasKey(x => x.Id);
-                b.Property(x => x.Id).HasColumnType("nvarchar(255)").IsRequired();
-                b.Property(x => x.Name).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.Id).HasMaxLength(255).IsRequired();
+                b.Property(x => x.Name).HasMaxLength(255).IsRequired();
                 b.Property(x => x.Brand).HasMaxLength(150);
                 b.Property(x => x.Category).HasColumnType("varchar(20)").IsRequired();
                 b.Property(x => x.FrameMaterial).HasMaxLength(100);
@@ -79,13 +79,13 @@ namespace OpticalStore.DAL.DBContext
             {
                 b.ToTable("ProductVariants", tb =>
                 {
-                    tb.HasCheckConstraint("CK_ProductVariants_Price", "[Price] >= 0");
-                    tb.HasCheckConstraint("CK_ProductVariants_Quantity", "[Quantity] >= 0");
-                    tb.HasCheckConstraint("CK_ProductVariants_Status", $"[Status] IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
+                    tb.HasCheckConstraint("CK_ProductVariants_Price", "\"Price\" >= 0");
+                    tb.HasCheckConstraint("CK_ProductVariants_Quantity", "\"Quantity\" >= 0");
+                    tb.HasCheckConstraint("CK_ProductVariants_Status", $"\"Status\" IN ('{StatusValues.Active}','{StatusValues.Inactive}')");
                 });
                 b.HasKey(x => x.Id);
-                b.Property(x => x.Id).HasColumnType("nvarchar(255)").IsRequired();
-                b.Property(x => x.ProductId).HasColumnType("nvarchar(255)").IsRequired();
+                b.Property(x => x.Id).HasMaxLength(255).IsRequired();
+                b.Property(x => x.ProductId).HasMaxLength(255).IsRequired();
                 b.Property(x => x.ColorName).HasMaxLength(100);
                 b.Property(x => x.SizeLabel).HasMaxLength(50);
                 b.Property(x => x.BridgeWidthMm).HasColumnType("numeric(6,2)");

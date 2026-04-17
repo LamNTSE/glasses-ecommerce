@@ -1,12 +1,19 @@
 using System.Text;
+using DotNetEnv;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.Metadata;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using OpticalStore.BLL;
 using OpticalStore.API.Middleware;
+using OpticalStore.DAL.DBContext;
+
+LoadEnvIfPresent();
 
 var builder = WebApplication.CreateBuilder(args);
+
+ConfigureCloudPortBinding(builder);
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -82,8 +89,7 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowAll", policy =>
         policy.SetIsOriginAllowed(_ => true)
               .AllowAnyMethod()
-              .AllowAnyHeader()
-              .AllowCredentials());
+              .AllowAnyHeader());
 });
 
 // Register BLL + DAL services through layered DI extensions
@@ -92,6 +98,9 @@ builder.Services.AddBllServices(builder.Configuration);
 // JWT Authentication (API responsibility)
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSection.GetValue<string>("Key") ?? string.Empty;
+var defaultConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+
+ValidateRequiredConfiguration(defaultConnection, jwtKey);
 
 builder.Services.AddAuthentication(options =>
 {
@@ -118,6 +127,8 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+ApplyMigrationsOnStartup(app, builder.Configuration);
+
 app.UseGlobalExceptionHandling();
 
 // Configure the HTTP request pipeline.
@@ -143,3 +154,60 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static void ConfigureCloudPortBinding(WebApplicationBuilder builder)
+{
+    var port = Environment.GetEnvironmentVariable("PORT");
+    if (!string.IsNullOrWhiteSpace(port) && string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
+    {
+        builder.WebHost.UseUrls($"http://*:{port}");
+    }
+}
+
+static void LoadEnvIfPresent()
+{
+    var candidates = new[] { ".env", "../.env" };
+    foreach (var candidate in candidates)
+    {
+        if (File.Exists(candidate))
+        {
+            Env.Load(candidate);
+            return;
+        }
+    }
+}
+
+static void ValidateRequiredConfiguration(string? defaultConnection, string jwtKey)
+{
+    if (string.IsNullOrWhiteSpace(defaultConnection) || defaultConnection.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Invalid 'ConnectionStrings:DefaultConnection'. Set a real value via environment variables.");
+    }
+
+    if (string.IsNullOrWhiteSpace(jwtKey) || jwtKey.Contains("CHANGE_ME", StringComparison.OrdinalIgnoreCase))
+    {
+        throw new InvalidOperationException("Invalid 'Jwt:Key'. Set a real value via environment variables.");
+    }
+
+    if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
+    {
+        throw new InvalidOperationException("'Jwt:Key' must be at least 32 bytes for HS256.");
+    }
+}
+
+static void ApplyMigrationsOnStartup(WebApplication app, IConfiguration configuration)
+{
+    var autoMigrate = configuration.GetValue("Database:AutoMigrate", true);
+    if (!autoMigrate)
+    {
+        return;
+    }
+
+    using var scope = app.Services.CreateScope();
+    var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger("StartupMigration");
+    var dbContext = scope.ServiceProvider.GetRequiredService<OpticalStoreDbContext>();
+
+    logger.LogInformation("Applying EF Core migrations on startup...");
+    dbContext.Database.Migrate();
+    logger.LogInformation("EF Core migrations applied successfully.");
+}

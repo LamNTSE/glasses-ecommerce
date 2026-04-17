@@ -2,8 +2,8 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using OpticalStore.DAL.DBContext;
 
 #nullable disable
@@ -18,18 +18,19 @@ namespace OpticalStore.DAL.Migrations
 #pragma warning disable 612, 618
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.25")
-                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+                .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
-            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+            NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("OpticalStore.DAL.Entities.Product", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("nvarchar(255)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("Brand")
                         .HasMaxLength(150)
-                        .HasColumnType("nvarchar(150)");
+                        .HasColumnType("character varying(150)");
 
                     b.Property<string>("Category")
                         .IsRequired()
@@ -37,39 +38,40 @@ namespace OpticalStore.DAL.Migrations
 
                     b.Property<string>("FrameMaterial")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("FrameType")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Gender")
                         .HasColumnType("varchar(20)");
 
                     b.Property<string>("HingeType")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
                     b.Property<string>("ModelUrl")
                         .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("nvarchar(255)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("NosePadType")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Shape")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -82,31 +84,32 @@ namespace OpticalStore.DAL.Migrations
 
                     b.ToTable("Products", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Products_Category", "[Category] IN ('FRAME','LENS','ACCESSORY')");
+                            t.HasCheckConstraint("CK_Products_Category", "\"Category\" IN ('FRAME','LENS','ACCESSORY')");
 
-                            t.HasCheckConstraint("CK_Products_Status", "[Status] IN ('ACTIVE','INACTIVE')");
+                            t.HasCheckConstraint("CK_Products_Status", "\"Status\" IN ('ACTIVE','INACTIVE')");
                         });
                 });
 
             modelBuilder.Entity("OpticalStore.DAL.Entities.ProductVariant", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("nvarchar(255)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<decimal?>("BridgeWidthMm")
                         .HasColumnType("numeric(6,2)");
 
                     b.Property<string>("ColorName")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("FrameFinish")
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("bit")
+                        .HasColumnType("boolean")
                         .HasDefaultValue(false);
 
                     b.Property<decimal?>("LensWidthMm")
@@ -115,23 +118,24 @@ namespace OpticalStore.DAL.Migrations
                     b.Property<string>("OrderItemType")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<decimal>("Price")
                         .HasColumnType("numeric(12,2)");
 
                     b.Property<string>("ProductId")
                         .IsRequired()
-                        .HasColumnType("nvarchar(255)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<int>("Quantity")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
+                        .HasColumnType("integer")
                         .HasDefaultValue(0);
 
                     b.Property<string>("SizeLabel")
                         .HasMaxLength(50)
-                        .HasColumnType("nvarchar(50)");
+                        .HasColumnType("character varying(50)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -147,53 +151,56 @@ namespace OpticalStore.DAL.Migrations
 
                     b.ToTable("ProductVariants", null, t =>
                         {
-                            t.HasCheckConstraint("CK_ProductVariants_Price", "[Price] >= 0");
+                            t.HasCheckConstraint("CK_ProductVariants_Price", "\"Price\" >= 0");
 
-                            t.HasCheckConstraint("CK_ProductVariants_Quantity", "[Quantity] >= 0");
+                            t.HasCheckConstraint("CK_ProductVariants_Quantity", "\"Quantity\" >= 0");
 
-                            t.HasCheckConstraint("CK_ProductVariants_Status", "[Status] IN ('ACTIVE','INACTIVE')");
+                            t.HasCheckConstraint("CK_ProductVariants_Status", "\"Status\" IN ('ACTIVE','INACTIVE')");
                         });
                 });
 
             modelBuilder.Entity("OpticalStore.DAL.Entities.User", b =>
                 {
                     b.Property<string>("Id")
-                        .HasColumnType("nvarchar(255)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<DateTime?>("Dob")
                         .HasColumnType("date");
 
                     b.Property<string>("Email")
                         .IsRequired()
-                        .HasColumnType("nvarchar(255)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("ImageUrl")
                         .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                        .HasColumnType("character varying(500)");
 
                     b.Property<string>("LastName")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.Property<string>("Password")
                         .IsRequired()
-                        .HasColumnType("nvarchar(255)");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("Phone")
                         .HasColumnType("varchar(20)");
 
                     b.Property<string>("RefreshToken")
                         .HasMaxLength(500)
-                        .HasColumnType("nvarchar(500)");
+                        .HasColumnType("character varying(500)");
 
                     b.Property<DateTime?>("RefreshTokenExpiryTime")
-                        .HasColumnType("datetime2");
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -202,7 +209,7 @@ namespace OpticalStore.DAL.Migrations
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("nvarchar(100)");
+                        .HasColumnType("character varying(100)");
 
                     b.HasKey("Id");
 
@@ -213,7 +220,7 @@ namespace OpticalStore.DAL.Migrations
                     b.HasIndex("Phone")
                         .IsUnique()
                         .HasDatabaseName("UX_Users_Phone")
-                        .HasFilter("[Phone] IS NOT NULL");
+                        .HasFilter("\"Phone\" IS NOT NULL");
 
                     b.HasIndex("Username")
                         .IsUnique()
@@ -221,7 +228,7 @@ namespace OpticalStore.DAL.Migrations
 
                     b.ToTable("Users", null, t =>
                         {
-                            t.HasCheckConstraint("CK_Users_Status", "[Status] IN ('ACTIVE','INACTIVE')");
+                            t.HasCheckConstraint("CK_Users_Status", "\"Status\" IN ('ACTIVE','INACTIVE')");
                         });
                 });
 
