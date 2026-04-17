@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
@@ -14,11 +14,11 @@ namespace OpticalStore.API.Controllers;
 [ApiController]
 [Route("feedbacks")]
 [Tags("10. Feedbacks")]
-public sealed class FeedbacksController : ControllerBase
+public sealed class FeedbackController : ControllerBase
 {
     private readonly OpticalStoreDbContext _dbContext;
 
-    public FeedbacksController(OpticalStoreDbContext dbContext)
+    public FeedbackController(OpticalStoreDbContext dbContext)
     {
         _dbContext = dbContext;
     }
@@ -282,3 +282,5 @@ public sealed class FeedbacksController : ControllerBase
         public string? Comment { get; set; }
     }
 }
+
+

@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpticalStore.API.Requests.Lenses;
 using OpticalStore.API.Responses;
@@ -10,11 +10,11 @@ namespace OpticalStore.API.Controllers;
 [ApiController]
 [Route("lenses")]
 [Tags("7. Lenses")]
-public sealed class LensesController : ControllerBase
+public sealed class LensController : ControllerBase
 {
     private readonly ILensService _lensService;
 
-    public LensesController(ILensService lensService)
+    public LensController(ILensService lensService)
     {
         _lensService = lensService;
     }
@@ -54,3 +54,5 @@ public sealed class LensesController : ControllerBase
         return Ok(new ApiResponse<LensResponseDto> { Result = result });
     }
 }
+
+

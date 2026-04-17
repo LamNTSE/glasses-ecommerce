@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpticalStore.API.Requests.ProductVariants;
 using OpticalStore.API.Responses;
@@ -10,11 +10,11 @@ namespace OpticalStore.API.Controllers;
 [ApiController]
 [Route("product-variants")]
 [Tags("6. Product Variants")]
-public sealed class ProductVariantsController : ControllerBase
+public sealed class ProductVariantController : ControllerBase
 {
     private readonly IProductVariantService _productVariantService;
 
-    public ProductVariantsController(IProductVariantService productVariantService)
+    public ProductVariantController(IProductVariantService productVariantService)
     {
         _productVariantService = productVariantService;
     }
@@ -92,3 +92,5 @@ public sealed class ProductVariantsController : ControllerBase
         return Ok(new ApiResponse<InventoryUpdateResultDto> { Result = result });
     }
 }
+
+

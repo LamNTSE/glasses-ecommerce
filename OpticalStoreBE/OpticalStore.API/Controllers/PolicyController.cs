@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpticalStore.API.Requests.Policies;
@@ -12,11 +12,11 @@ namespace OpticalStore.API.Controllers;
 [ApiController]
 [Route("api/policies")]
 [Tags("10. Policies")]
-public sealed class PoliciesController : ControllerBase
+public sealed class PolicyController : ControllerBase
 {
     private readonly IPolicyService _policyService;
 
-    public PoliciesController(IPolicyService policyService)
+    public PolicyController(IPolicyService policyService)
     {
         _policyService = policyService;
     }
@@ -91,3 +91,5 @@ public sealed class PoliciesController : ControllerBase
         };
     }
 }
+
+

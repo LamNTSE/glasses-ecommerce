@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,12 +12,12 @@ namespace OpticalStore.API.Controllers;
 [ApiController]
 [Route("notifications")]
 [Tags("11. Notifications")]
-public sealed class NotificationsController : ControllerBase
+public sealed class NotificationController : ControllerBase
 {
     private readonly INotificationService _notificationService;
     private readonly INotificationStreamService _notificationStreamService;
 
-    public NotificationsController(INotificationService notificationService, INotificationStreamService notificationStreamService)
+    public NotificationController(INotificationService notificationService, INotificationStreamService notificationStreamService)
     {
         _notificationService = notificationService;
         _notificationStreamService = notificationStreamService;
@@ -116,3 +116,5 @@ public sealed class NotificationsController : ControllerBase
         await Response.Body.FlushAsync(cancellationToken);
     }
 }
+
+

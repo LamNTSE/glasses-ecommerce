@@ -24,7 +24,7 @@ public sealed class UsersController : ControllerBase
     [HttpPost("registration")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> Register(
-        [FromForm] string userInfor,
+        [FromForm(Name = "UserInfor")] string userInfor,
         IFormFile? imageUrl,
         CancellationToken cancellationToken)
     {

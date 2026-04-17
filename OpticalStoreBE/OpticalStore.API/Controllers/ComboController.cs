@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -12,11 +12,11 @@ namespace OpticalStore.API.Controllers;
 [ApiController]
 [Route("api/combos")]
 [Tags("8. Combos")]
-public sealed class CombosController : ControllerBase
+public sealed class ComboController : ControllerBase
 {
     private readonly OpticalStoreDbContext _dbContext;
 
-    public CombosController(OpticalStoreDbContext dbContext)
+    public ComboController(OpticalStoreDbContext dbContext)
     {
         _dbContext = dbContext;
     }
@@ -523,3 +523,5 @@ public sealed class CombosController : ControllerBase
         public int Quantity { get; set; }
     }
 }
+
+
