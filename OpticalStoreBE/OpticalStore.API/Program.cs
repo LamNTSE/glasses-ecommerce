@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using OpticalStore.API.Middleware;
+using OpticalStore.API.Swagger;
 using OpticalStore.BLL;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -40,6 +41,8 @@ builder.Services.AddSwaggerGen(options =>
 			Array.Empty<string>()
 		}
 	});
+
+			options.DocumentFilter<SortTagsDocumentFilter>();
 });
 
 builder.Services.AddBllServices(builder.Configuration);

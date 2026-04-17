@@ -9,7 +9,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("product-variants")]
-[Tags("6. Product Variants")]
+[Tags("06. Product Variants")]
 public sealed class ProductVariantController : ControllerBase
 {
     private readonly IProductVariantService _productVariantService;

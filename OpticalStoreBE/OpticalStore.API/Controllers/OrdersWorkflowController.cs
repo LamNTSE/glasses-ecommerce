@@ -12,7 +12,7 @@ using OpticalStore.DAL.Entities;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
-[Tags("9. Orders")]
+[Tags("09. Orders")]
 public sealed class OrdersWorkflowController : ControllerBase
 {
     private const decimal MaxDiscountPercent = 50m;

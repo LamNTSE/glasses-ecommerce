@@ -8,7 +8,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("auth")]
-[Tags("1. Authentication")]
+[Tags("01. Authentication")]
 public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;

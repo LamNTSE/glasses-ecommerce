@@ -11,7 +11,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("api/policies")]
-[Tags("13. Policies")]
+[Tags("12. Policies")]
 public sealed class PolicyController : ControllerBase
 {
     private readonly IPolicyService _policyService;

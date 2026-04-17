@@ -10,7 +10,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("permissions")]
-[Tags("4. Permissions")]
+[Tags("04. Permissions")]
 [Authorize(Roles = "ADMIN")]
 public sealed class PermissionsController : ControllerBase
 {

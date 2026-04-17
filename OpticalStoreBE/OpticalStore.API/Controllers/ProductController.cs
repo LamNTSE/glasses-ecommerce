@@ -12,7 +12,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("products")]
-[Tags("5. Products")]
+[Tags("05. Products")]
 public sealed class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;

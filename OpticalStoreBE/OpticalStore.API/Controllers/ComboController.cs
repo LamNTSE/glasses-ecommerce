@@ -11,7 +11,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("api/combos")]
-[Tags("8. Combos")]
+[Tags("08. Combos")]
 public sealed class ComboController : ControllerBase
 {
     private readonly OpticalStoreDbContext _dbContext;

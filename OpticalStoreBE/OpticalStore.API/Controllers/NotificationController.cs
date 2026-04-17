@@ -11,7 +11,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("notifications")]
-[Tags("14. Notifications")]
+[Tags("13. Notifications")]
 public sealed class NotificationController : ControllerBase
 {
     private readonly INotificationService _notificationService;

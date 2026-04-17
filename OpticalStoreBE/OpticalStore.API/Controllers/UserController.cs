@@ -11,7 +11,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("users")]
-[Tags("2. Users")]
+[Tags("02. Users")]
 public sealed class UsersController : ControllerBase
 {
     private readonly IUserService _userService;

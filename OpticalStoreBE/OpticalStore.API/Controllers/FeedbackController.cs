@@ -13,7 +13,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("feedbacks")]
-[Tags("15. Feedbacks")]
+[Tags("14. Feedbacks")]
 public sealed class FeedbackController : ControllerBase
 {
     private readonly OpticalStoreDbContext _dbContext;

@@ -9,7 +9,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("lenses")]
-[Tags("7. Lenses")]
+[Tags("07. Lenses")]
 public sealed class LensController : ControllerBase
 {
     private readonly ILensService _lensService;

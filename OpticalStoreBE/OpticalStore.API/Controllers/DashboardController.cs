@@ -8,7 +8,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("dashboard")]
-[Tags("16. Dashboard")]
+[Tags("15. Dashboard")]
 public sealed class DashboardController : ControllerBase
 {
     private readonly IDashboardService _dashboardService;
