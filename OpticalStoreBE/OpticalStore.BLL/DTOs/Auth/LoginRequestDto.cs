@@ -1,6 +1,6 @@
-namespace OpticalStore.API.Requests.Auth;
+namespace OpticalStore.BLL.DTOs.Auth;
 
-public sealed class LoginRequest
+public sealed class LoginRequestDto
 {
     public string Username { get; set; } = string.Empty;
 

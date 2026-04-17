@@ -1,148 +1,81 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using OpticalStore.API.Requests.Auth;
-using OpticalStore.API.Responses.Auth;
-using OpticalStore.BLL.DTOs;
+using OpticalStore.API.Responses;
+using OpticalStore.BLL.DTOs.Auth;
 using OpticalStore.BLL.Services.Interfaces;
 
-namespace OpticalStore.API.Controllers
+namespace OpticalStore.API.Controllers;
+
+[ApiController]
+[Route("auth")]
+[Tags("1. Authentication")]
+public sealed class AuthController : ControllerBase
 {
-    [ApiController]
-    [Route("auth")]
-    [Tags("1. Authentication")]
-    public class AuthController : ControllerBase
+    private readonly IAuthService _authService;
+
+    public AuthController(IAuthService authService)
     {
-        private readonly IAuthService _authService;
+        _authService = authService;
+    }
 
-        public AuthController(IAuthService authService)
-        {
-            _authService = authService;
-        }
-
-        [HttpPost("register")]
-        public async Task<ActionResult<AuthResponse>> Register([FromBody] RegisterRequest? request)
-        {
-            if (request == null)
+    [HttpPost("login")]
+    [ProducesResponseType(typeof(ApiResponse<AuthResultDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<AuthResultDto>>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.LoginAsync(
+            new LoginRequestDto
             {
-                return BadRequest("Request body is required.");
-            }
-
-            var dto = new RegisterRequestDto
-            {
-                Dob = request.Dob,
-                Email = request.Email,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
                 Username = request.Username,
-                Password = request.Password,
-                Phone = request.Phone
-            };
-
-            var result = await _authService.RegisterAsync(dto);
-            return Ok(ToAuthResponse(result));
-        }
-
-        [HttpPost("login")]
-        public async Task<ActionResult<AuthResponse>> Login([FromBody] LoginRequest? request)
-        {
-            if (request == null)
-            {
-                return BadRequest("Request body is required.");
-            }
-
-            var dto = new LoginRequestDto
-            {
-                Email = request.Email,
                 Password = request.Password
-            };
+            },
+            cancellationToken);
 
-            var result = await _authService.LoginAsync(dto);
-            return Ok(ToAuthResponse(result));
-        }
-
-        [HttpPost("refresh-token")]
-        public async Task<ActionResult<AuthResponse>> RefreshToken([FromBody] RefreshTokenRequest? request)
+        return Ok(new ApiResponse<AuthResultDto>
         {
-            if (request == null)
-            {
-                return BadRequest("Request body is required.");
-            }
+            Result = result
+        });
+    }
 
-            var result = await _authService.RefreshTokenAsync(request.RefreshToken);
-            return Ok(ToAuthResponse(result));
-        }
+    [HttpPost("introspect")]
+    [ProducesResponseType(typeof(ApiResponse<IntrospectResultDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<IntrospectResultDto>>> Introspect([FromBody] TokenRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.IntrospectAsync(
+            new TokenRequestDto { Token = request.Token },
+            cancellationToken);
 
-        [Authorize]
-        [HttpPost("logout")]
-        public async Task<IActionResult> Logout()
+        return Ok(new ApiResponse<IntrospectResultDto>
         {
-            var userId = GetCurrentUserId();
-            if (string.IsNullOrWhiteSpace(userId))
-            {
-                return Unauthorized();
-            }
+            Result = result
+        });
+    }
 
-            await _authService.RevokeRefreshTokenAsync(userId);
-            return Ok();
-        }
+    [HttpPost("refresh")]
+    [ProducesResponseType(typeof(ApiResponse<AuthResultDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<AuthResultDto>>> Refresh([FromBody] TokenRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _authService.RefreshAsync(
+            new TokenRequestDto { Token = request.Token },
+            cancellationToken);
 
-        [Authorize]
-        [HttpGet("me")]
-        public async Task<ActionResult<UserResponse?>> Me()
+        return Ok(new ApiResponse<AuthResultDto>
         {
-            var userId = GetCurrentUserId();
-            if (string.IsNullOrWhiteSpace(userId))
-            {
-                return Unauthorized();
-            }
+            Result = result
+        });
+    }
 
-            var currentUser = await _authService.GetCurrentUserAsync(userId);
-            if (currentUser == null)
-            {
-                return NotFound();
-            }
+    [HttpPost("logout")]
+    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<ApiResponse<object>>> Logout([FromBody] TokenRequest request, CancellationToken cancellationToken)
+    {
+        await _authService.LogoutAsync(
+            new TokenRequestDto { Token = request.Token },
+            cancellationToken);
 
-            return Ok(ToUserResponse(currentUser));
-        }
-
-        private string? GetCurrentUserId()
+        return Ok(new ApiResponse<object>
         {
-            var sub = User.FindFirstValue(ClaimTypes.NameIdentifier)
-                ?? User.FindFirstValue(ClaimTypes.Name)
-                ?? User.FindFirstValue(JwtRegisteredClaimNames.Sub);
-
-            return string.IsNullOrWhiteSpace(sub) ? null : sub;
-        }
-
-        private static AuthResponse ToAuthResponse(AuthResultDto dto)
-        {
-            return new AuthResponse
-            {
-                AccessToken = dto.AccessToken,
-                RefreshToken = dto.RefreshToken,
-                ExpiresIn = dto.ExpiresIn,
-                User = dto.User == null ? null : ToUserResponse(dto.User)
-            };
-        }
-
-        private static UserResponse ToUserResponse(UserDto dto)
-        {
-            return new UserResponse
-            {
-                Id = dto.Id,
-                Dob = dto.Dob,
-                Email = dto.Email,
-                FirstName = dto.FirstName,
-                LastName = dto.LastName,
-                Username = dto.Username,
-                Phone = dto.Phone,
-                ImageUrl = dto.ImageUrl,
-                Status = dto.Status
-            };
-        }
-
+            Message = "Logout successful",
+            Result = null
+        });
     }
 }

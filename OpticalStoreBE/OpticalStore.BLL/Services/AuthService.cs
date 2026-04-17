@@ -1,211 +1,251 @@
-using System;
 using System.IdentityModel.Tokens.Jwt;
+using System.Net;
 using System.Security.Claims;
-using System.Security.Cryptography;
 using System.Text;
-using System.Threading.Tasks;
+using BCrypt.Net;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using OpticalStore.BLL.DTOs;
+using OpticalStore.BLL.Configuration;
+using OpticalStore.BLL.DTOs.Auth;
+using OpticalStore.BLL.Exceptions;
 using OpticalStore.BLL.Services.Interfaces;
+using OpticalStore.DAL.DBContext;
 using OpticalStore.DAL.Entities;
-using OpticalStore.DAL.Entities.Enums;
-using OpticalStore.DAL.Repositories.Interfaces;
 
-namespace OpticalStore.BLL.Services
+namespace OpticalStore.BLL.Services;
+
+public sealed class AuthService : IAuthService
 {
-    public class AuthService : IAuthService
+    private static readonly JwtSecurityTokenHandler TokenHandler = new();
+
+    private readonly OpticalStoreDbContext _dbContext;
+    private readonly JwtOptions _jwtOptions;
+    private readonly TokenValidationParameters _tokenValidationParameters;
+
+    public AuthService(OpticalStoreDbContext dbContext, IOptions<JwtOptions> jwtOptions)
     {
-        private readonly IUserRepository _userRepository;
-        private readonly JwtSettings _jwtSettings;
+        _dbContext = dbContext;
+        _jwtOptions = jwtOptions.Value;
 
-        public AuthService(IUserRepository userRepository, IOptions<JwtSettings> jwtOptions)
+        if (string.IsNullOrWhiteSpace(_jwtOptions.Key) || Encoding.UTF8.GetByteCount(_jwtOptions.Key) < 32)
         {
-            _userRepository = userRepository;
-            _jwtSettings = jwtOptions.Value;
+            throw new AppException("CONFIG_INVALID", "Jwt:Key must be at least 32 bytes.", HttpStatusCode.InternalServerError);
         }
 
-        public async Task<AuthResultDto> RegisterAsync(RegisterRequestDto request)
+        var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Key));
+        _tokenValidationParameters = new TokenValidationParameters
         {
-            if (request.Dob.HasValue && request.Dob.Value.Date > DateTime.UtcNow.Date)
-            {
-                throw new ArgumentException("Dob cannot be in the future.");
-            }
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = signingKey,
+            ValidateIssuer = true,
+            ValidIssuer = _jwtOptions.Issuer,
+            ValidateAudience = true,
+            ValidAudience = _jwtOptions.Audience,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.Zero
+        };
+    }
 
-            var existingUser = await _userRepository.GetByEmailAsync(request.Email);
-            if (existingUser != null)
-            {
-                throw new InvalidOperationException("Email already in use.");
-            }
+    public async Task<AuthResultDto> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var normalizedUsername = request.Username.Trim();
+        var user = await _dbContext.Users
+            .Include(x => x.RoleNames)
+            .ThenInclude(x => x.PermissionsNames)
+            .FirstOrDefaultAsync(x => x.Username == normalizedUsername, cancellationToken);
 
-            var existingUsername = await _userRepository.GetByUsernameAsync(request.Username);
-            if (existingUsername != null)
-            {
-                throw new InvalidOperationException("Username already in use.");
-            }
-
-            var user = new User
-            {
-                Id = Guid.NewGuid().ToString("D").ToLowerInvariant(),
-                Dob = request.Dob?.Date,
-                Email = request.Email,
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                Username = request.Username,
-                Password = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                Phone = request.Phone,
-                Status = StatusValues.Active
-            };
-
-            await _userRepository.AddAsync(user);
-            await _userRepository.SaveChangesAsync();
-
-            var accessToken = GenerateAccessToken(user);
-            var refreshToken = GenerateRefreshToken();
-
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays);
-            _userRepository.Update(user);
-            await _userRepository.SaveChangesAsync();
-
-            return BuildAuthResult(user, accessToken, refreshToken);
+        if (user is null || string.IsNullOrWhiteSpace(user.Password) || !BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
+        {
+            throw new AppException("UNAUTHENTICATED", "Invalid username or password.", HttpStatusCode.Unauthorized);
         }
 
-        public async Task<AuthResultDto> LoginAsync(LoginRequestDto request)
+        var token = GenerateAccessToken(user);
+
+        return new AuthResultDto
         {
-            var user = await _userRepository.GetByEmailAsync(request.Email);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
-            {
-                throw new UnauthorizedAccessException("Invalid email or password.");
-            }
+            Token = token,
+            Authenticated = true
+        };
+    }
 
-            if (!string.Equals(user.Status, StatusValues.Active, StringComparison.OrdinalIgnoreCase))
-            {
-                throw new UnauthorizedAccessException("User account is inactive.");
-            }
+    public async Task<IntrospectResultDto> IntrospectAsync(TokenRequestDto request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var principal = await ValidateTokenAsync(request.Token, isRefreshFlow: false, cancellationToken);
+            return new IntrospectResultDto { Valid = principal is not null };
+        }
+        catch
+        {
+            return new IntrospectResultDto { Valid = false };
+        }
+    }
 
-            var accessToken = GenerateAccessToken(user);
-            var refreshToken = GenerateRefreshToken();
+    public async Task<AuthResultDto> RefreshAsync(TokenRequestDto request, CancellationToken cancellationToken = default)
+    {
+        var principal = await ValidateTokenAsync(request.Token, isRefreshFlow: true, cancellationToken);
+        var username = principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
 
-            user.RefreshToken = refreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays);
-            _userRepository.Update(user);
-            await _userRepository.SaveChangesAsync();
-
-            return BuildAuthResult(user, accessToken, refreshToken);
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            throw new AppException("UNAUTHENTICATED", "Invalid token subject.", HttpStatusCode.Unauthorized);
         }
 
-        public async Task<AuthResultDto> RefreshTokenAsync(string refreshToken)
+        var user = await _dbContext.Users
+            .Include(x => x.RoleNames)
+            .ThenInclude(x => x.PermissionsNames)
+            .FirstOrDefaultAsync(x => x.Username == username, cancellationToken);
+
+        if (user is null)
         {
-            if (string.IsNullOrWhiteSpace(refreshToken))
-            {
-                throw new UnauthorizedAccessException("Invalid refresh token.");
-            }
-
-            var user = await _userRepository.GetByRefreshTokenAsync(refreshToken);
-            if (user == null)
-            {
-                throw new UnauthorizedAccessException("Refresh token is invalid or expired.");
-            }
-
-            var newAccessToken = GenerateAccessToken(user);
-            var newRefreshToken = GenerateRefreshToken();
-
-            user.RefreshToken = newRefreshToken;
-            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(_jwtSettings.RefreshTokenExpirationDays);
-            _userRepository.Update(user);
-            await _userRepository.SaveChangesAsync();
-
-            return BuildAuthResult(user, newAccessToken, newRefreshToken);
+            throw new AppException("USER_NOT_EXISTED", "User not found.", HttpStatusCode.NotFound);
         }
 
-        public async Task RevokeRefreshTokenAsync(string userId)
+        var parsedJwt = TokenHandler.ReadJwtToken(request.Token);
+        await InvalidateTokenAsync(parsedJwt, cancellationToken);
+
+        return new AuthResultDto
         {
-            var user = await _userRepository.GetByIdAsync(userId);
-            if (user == null)
+            Token = GenerateAccessToken(user),
+            Authenticated = true
+        };
+    }
+
+    public async Task LogoutAsync(TokenRequestDto request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var principal = await ValidateTokenAsync(request.Token, isRefreshFlow: false, cancellationToken);
+            if (principal is null)
             {
                 return;
             }
 
-            user.RefreshToken = null;
-            user.RefreshTokenExpiryTime = null;
-            _userRepository.Update(user);
-            await _userRepository.SaveChangesAsync();
+            var parsedJwt = TokenHandler.ReadJwtToken(request.Token);
+            await InvalidateTokenAsync(parsedJwt, cancellationToken);
         }
-
-        public async Task<UserDto?> GetCurrentUserAsync(string userId)
+        catch (SecurityTokenExpiredException)
         {
-            var user = await _userRepository.GetByIdAsync(userId);
-            if (user == null)
+            // Keep behavior aligned with Spring service: expired token logout is treated as no-op.
+        }
+    }
+
+    private string GenerateAccessToken(User user)
+    {
+        var utcNow = DateTime.UtcNow;
+        var claims = new List<Claim>
+        {
+            new(JwtRegisteredClaimNames.Sub, user.Username ?? user.Id),
+            new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new("userId", user.Id)
+        };
+
+        foreach (var role in user.RoleNames)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, role.Name));
+
+            foreach (var permission in role.PermissionsNames)
             {
-                return null;
+                claims.Add(new Claim("permission", permission.Name));
             }
-
-            return new UserDto
-            {
-                Id = user.Id,
-                Dob = user.Dob,
-                Email = user.Email,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                Username = user.Username,
-                Phone = user.Phone,
-                ImageUrl = user.ImageUrl,
-                Status = user.Status
-            };
         }
 
-        private AuthResultDto BuildAuthResult(User user, string accessToken, string refreshToken)
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Key)),
+            SecurityAlgorithms.HmacSha512);
+
+        var token = new JwtSecurityToken(
+            issuer: _jwtOptions.Issuer,
+            audience: _jwtOptions.Audience,
+            claims: claims,
+            notBefore: utcNow,
+            expires: utcNow.AddMinutes(_jwtOptions.AccessTokenExpirationMinutes),
+            signingCredentials: credentials);
+
+        return TokenHandler.WriteToken(token);
+    }
+
+    private async Task<ClaimsPrincipal> ValidateTokenAsync(string token, bool isRefreshFlow, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(token))
         {
-            return new AuthResultDto
-            {
-                AccessToken = accessToken,
-                RefreshToken = refreshToken,
-                ExpiresIn = _jwtSettings.AccessTokenExpirationMinutes * 60,
-                User = new UserDto
-                {
-                    Id = user.Id,
-                    Dob = user.Dob,
-                    Email = user.Email,
-                    FirstName = user.FirstName,
-                    LastName = user.LastName,
-                    Username = user.Username,
-                    Phone = user.Phone,
-                    ImageUrl = user.ImageUrl,
-                    Status = user.Status
-                }
-            };
+            throw new AppException("UNAUTHENTICATED", "Token is required.", HttpStatusCode.Unauthorized);
         }
 
-        private string GenerateAccessToken(User user)
+        TokenValidationParameters validationParameters;
+
+        if (isRefreshFlow)
         {
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
-            var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-            var claims = new[]
-            {
-                new Claim(JwtRegisteredClaimNames.Sub, user.Id),
-                new Claim(ClaimTypes.NameIdentifier, user.Id),
-                new Claim(JwtRegisteredClaimNames.Email, user.Email),
-                new Claim(ClaimTypes.Name, user.Username)
-            };
-
-            var token = new JwtSecurityToken(
-                issuer: _jwtSettings.Issuer,
-                audience: _jwtSettings.Audience,
-                claims: claims,
-                expires: DateTime.UtcNow.AddMinutes(_jwtSettings.AccessTokenExpirationMinutes),
-                signingCredentials: credentials);
-
-            return new JwtSecurityTokenHandler().WriteToken(token);
+            validationParameters = _tokenValidationParameters.Clone();
+            validationParameters.ValidateLifetime = false;
         }
-
-        private static string GenerateRefreshToken()
+        else
         {
-            var randomBytes = new byte[64];
-            using var rng = RandomNumberGenerator.Create();
-            rng.GetBytes(randomBytes);
-            return Convert.ToBase64String(randomBytes);
+            validationParameters = _tokenValidationParameters;
         }
+
+        var principal = TokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
+
+        if (validatedToken is not JwtSecurityToken jwt ||
+            !jwt.Header.Alg.Equals(SecurityAlgorithms.HmacSha512, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new AppException("UNAUTHENTICATED", "Invalid token algorithm.", HttpStatusCode.Unauthorized);
+        }
+
+        if (isRefreshFlow)
+        {
+            var issuedAt = jwt.IssuedAt;
+            var refreshWindowEnd = issuedAt.AddDays(_jwtOptions.RefreshTokenExpirationDays);
+            if (DateTime.UtcNow > refreshWindowEnd)
+            {
+                throw new AppException("UNAUTHENTICATED", "Refresh window expired.", HttpStatusCode.Unauthorized);
+            }
+        }
+
+        var jti = principal.FindFirst(JwtRegisteredClaimNames.Jti)?.Value;
+        if (string.IsNullOrWhiteSpace(jti))
+        {
+            throw new AppException("UNAUTHENTICATED", "Token ID is missing.", HttpStatusCode.Unauthorized);
+        }
+
+        var tokenIsInvalidated = await _dbContext.InvalidatedTokens.AnyAsync(x => x.Id == jti, cancellationToken);
+        if (tokenIsInvalidated)
+        {
+            throw new AppException("UNAUTHENTICATED", "Token is invalidated.", HttpStatusCode.Unauthorized);
+        }
+
+        return principal;
+    }
+
+    private async Task InvalidateTokenAsync(JwtSecurityToken token, CancellationToken cancellationToken)
+    {
+        var jti = token.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Jti)?.Value;
+        if (string.IsNullOrWhiteSpace(jti))
+        {
+            return;
+        }
+
+        var existed = await _dbContext.InvalidatedTokens.AnyAsync(x => x.Id == jti, cancellationToken);
+        if (existed)
+        {
+            return;
+        }
+
+        var expiry = token.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Exp)?.Value;
+        DateTime? expiryTime = null;
+
+        if (long.TryParse(expiry, out var expUnix))
+        {
+            expiryTime = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
+        }
+
+        _dbContext.InvalidatedTokens.Add(new InvalidatedToken
+        {
+            Id = jti,
+            ExpiryTime = expiryTime
+        });
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }
