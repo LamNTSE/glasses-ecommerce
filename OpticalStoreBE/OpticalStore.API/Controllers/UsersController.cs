@@ -25,7 +25,7 @@ public sealed class UsersController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> Register(
         [FromForm] string userInfor,
-        [FromForm] IFormFile? imageUrl,
+        IFormFile? imageUrl,
         CancellationToken cancellationToken)
     {
         _ = imageUrl;
@@ -81,7 +81,7 @@ public sealed class UsersController : ControllerBase
     [Authorize(Roles = "CUSTOMER")]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateMe(
         [FromForm] string data,
-        [FromForm] IFormFile? imageUrl,
+        IFormFile? imageUrl,
         CancellationToken cancellationToken)
     {
         _ = imageUrl;

@@ -26,7 +26,7 @@ public sealed class ProductsController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductResponseDto>>> Create(
         [FromForm] string product,
-        [FromForm] List<IFormFile>? files,
+        List<IFormFile>? files,
         CancellationToken cancellationToken)
     {
         var request = JsonSerializer.Deserialize<ProductRequest>(product, new JsonSerializerOptions
@@ -142,7 +142,7 @@ public sealed class ProductsController : ControllerBase
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<List<ProductImageDto>>>> UploadImages(
         string productId,
-        [FromForm] List<IFormFile> files,
+        List<IFormFile> files,
         CancellationToken cancellationToken)
     {
         var imageUrls = files.Select(x => $"local://product/{Guid.NewGuid():N}-{x.FileName}").ToList();
@@ -198,7 +198,7 @@ public sealed class ProductsController : ControllerBase
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<ProductResponseDto>>> UploadModel(
         string productId,
-        [FromForm] IFormFile file,
+        IFormFile file,
         CancellationToken cancellationToken)
     {
         var modelUrl = $"local://model/{Guid.NewGuid():N}-{file.FileName}";
