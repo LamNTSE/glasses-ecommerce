@@ -11,7 +11,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("payment")]
-[Tags("9. Payment")]
+[Tags("10. Payment")]
 public sealed class PaymentController : ControllerBase
 {
     private readonly OpticalStoreDbContext _dbContext;

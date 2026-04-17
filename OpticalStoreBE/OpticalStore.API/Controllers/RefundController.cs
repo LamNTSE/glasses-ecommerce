@@ -11,7 +11,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("refund")]
-[Tags("13. Refund")]
+[Tags("11. Refund")]
 public sealed class RefundController : ControllerBase
 {
     private readonly OpticalStoreDbContext _dbContext;
