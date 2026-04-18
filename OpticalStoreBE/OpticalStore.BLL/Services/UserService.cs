@@ -1,12 +1,11 @@
 using System.Net;
 using BCrypt.Net;
-using Microsoft.EntityFrameworkCore;
 using OpticalStore.BLL.DTOs.Common;
 using OpticalStore.BLL.DTOs.Users;
 using OpticalStore.BLL.Exceptions;
 using OpticalStore.BLL.Services.Interfaces;
-using OpticalStore.DAL.DBContext;
 using OpticalStore.DAL.Entities;
+using OpticalStore.DAL.Repositories.Interfaces;
 
 namespace OpticalStore.BLL.Services;
 
@@ -14,22 +13,24 @@ public sealed class UserService : IUserService
 {
     private const string DefaultAvatarUrl = "https://i.pinimg.com/1200x/3a/61/2c/3a612c76f58249ad16349f0cebc9d2b6.jpg";
 
-    private readonly OpticalStoreDbContext _dbContext;
+    private readonly IUserRepository _userRepository;
+    private readonly IRoleRepository _roleRepository;
 
-    public UserService(OpticalStoreDbContext dbContext)
+    public UserService(IUserRepository userRepository, IRoleRepository roleRepository)
     {
-        _dbContext = dbContext;
+        _userRepository = userRepository;
+        _roleRepository = roleRepository;
     }
 
     public async Task<UserResponseDto> RegisterAsync(UserRegistrationDto request, CancellationToken cancellationToken = default)
     {
-        var existed = await _dbContext.Users.AnyAsync(x => x.Username == request.Username, cancellationToken);
+        var existed = await _userRepository.ExistsByUsernameAsync(request.Username, cancellationToken);
         if (existed)
         {
             throw new AppException("USER_EXISTED", "Username already existed.", HttpStatusCode.BadRequest);
         }
 
-        var customerRole = await _dbContext.Roles.FirstOrDefaultAsync(x => x.Name == "CUSTOMER", cancellationToken);
+        var customerRole = await _roleRepository.GetByNameWithPermissionsAsync("CUSTOMER", cancellationToken);
         if (customerRole is null)
         {
             throw new AppException("ROLE_NOT_FOUND", "Default CUSTOMER role not found.", HttpStatusCode.BadRequest);
@@ -50,18 +51,15 @@ public sealed class UserService : IUserService
 
         user.RoleNames.Add(customerRole);
 
-        _dbContext.Users.Add(user);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _userRepository.AddAsync(user, cancellationToken);
+        await _userRepository.SaveChangesAsync(cancellationToken);
 
         return await GetByIdAsync(user.Id, cancellationToken);
     }
 
     public async Task<List<UserResponseDto>> GetUsersAsync(string role, CancellationToken cancellationToken = default)
     {
-        var users = await _dbContext.Users
-            .Include(x => x.RoleNames)
-            .ThenInclude(x => x.PermissionsNames)
-            .ToListAsync(cancellationToken);
+        var users = await _userRepository.GetUsersWithSecurityAsync(cancellationToken);
 
         if (!string.IsNullOrWhiteSpace(role))
         {
@@ -80,10 +78,7 @@ public sealed class UserService : IUserService
 
     public async Task<UserResponseDto> GetByIdAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var user = await _dbContext.Users
-            .Include(x => x.RoleNames)
-            .ThenInclude(x => x.PermissionsNames)
-            .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        var user = await _userRepository.GetByIdWithSecurityAsync(userId, cancellationToken);
 
         if (user is null)
         {
@@ -95,10 +90,7 @@ public sealed class UserService : IUserService
 
     public async Task<UserResponseDto> UpdateMyProfileAsync(string userId, UserUpdateDto request, CancellationToken cancellationToken = default)
     {
-        var user = await _dbContext.Users
-            .Include(x => x.RoleNames)
-            .ThenInclude(x => x.PermissionsNames)
-            .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        var user = await _userRepository.GetByIdWithSecurityAsync(userId, cancellationToken);
 
         if (user is null)
         {
@@ -116,17 +108,14 @@ public sealed class UserService : IUserService
         user.Email = request.Email ?? user.Email;
         user.Phone = request.Phone ?? user.Phone;
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _userRepository.SaveChangesAsync(cancellationToken);
 
         return MapUser(user);
     }
 
     public async Task<UserResponseDto> UpdateStatusAsync(string userId, string status, CancellationToken cancellationToken = default)
     {
-        var user = await _dbContext.Users
-            .Include(x => x.RoleNames)
-            .ThenInclude(x => x.PermissionsNames)
-            .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        var user = await _userRepository.GetByIdWithSecurityAsync(userId, cancellationToken);
 
         if (user is null)
         {
@@ -134,26 +123,21 @@ public sealed class UserService : IUserService
         }
 
         user.Status = status;
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _userRepository.SaveChangesAsync(cancellationToken);
 
         return MapUser(user);
     }
 
     public async Task<UserResponseDto> UpdateRoleAsync(string userId, string role, CancellationToken cancellationToken = default)
     {
-        var user = await _dbContext.Users
-            .Include(x => x.RoleNames)
-            .ThenInclude(x => x.PermissionsNames)
-            .FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        var user = await _userRepository.GetByIdWithSecurityAsync(userId, cancellationToken);
 
         if (user is null)
         {
             throw new AppException("USER_NOT_EXISTED", "User not found.", HttpStatusCode.NotFound);
         }
 
-        var targetRole = await _dbContext.Roles
-            .Include(x => x.PermissionsNames)
-            .FirstOrDefaultAsync(x => x.Name == role, cancellationToken);
+        var targetRole = await _roleRepository.GetByNameWithPermissionsAsync(role, cancellationToken);
 
         if (targetRole is null)
         {
@@ -163,21 +147,21 @@ public sealed class UserService : IUserService
         user.RoleNames.Clear();
         user.RoleNames.Add(targetRole);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _userRepository.SaveChangesAsync(cancellationToken);
 
         return MapUser(user);
     }
 
     public async Task DeleteAsync(string userId, CancellationToken cancellationToken = default)
     {
-        var user = await _dbContext.Users.FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
         if (user is null)
         {
             throw new AppException("USER_NOT_EXISTED", "User not found.", HttpStatusCode.NotFound);
         }
 
-        _dbContext.Users.Remove(user);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        _userRepository.Remove(user);
+        await _userRepository.SaveChangesAsync(cancellationToken);
     }
 
     private static UserResponseDto MapUser(User user)
