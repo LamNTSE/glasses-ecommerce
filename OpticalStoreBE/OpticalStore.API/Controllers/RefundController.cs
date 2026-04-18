@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpticalStore.API.Requests.Refunds;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.Exceptions;
 using OpticalStore.DAL.DBContext;
@@ -236,8 +237,4 @@ public sealed class RefundController : ControllerBase
         };
     }
 
-    public sealed class RefundBatchRequest
-    {
-        public List<string> OrderIds { get; set; } = new();
-    }
 }

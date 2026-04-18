@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.ProductVariants;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.DTOs.ProductVariants;
@@ -23,20 +24,7 @@ public sealed class ProductVariantController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductVariantDto>>> Create([FromBody] ProductVariantRequest request, CancellationToken cancellationToken)
     {
-        var result = await _productVariantService.CreateAsync(new ProductVariantUpsertDto
-        {
-            ProductId = request.ProductId,
-            ColorName = request.ColorName,
-            FrameFinish = request.FrameFinish,
-            LensWidthMm = request.LensWidthMm,
-            BridgeWidthMm = request.BridgeWidthMm,
-            TempleLengthMm = request.TempleLengthMm,
-            SizeLabel = request.SizeLabel,
-            Price = request.Price,
-            Quantity = request.Quantity,
-            Status = request.Status,
-            OrderItemType = request.OrderItemType
-        }, cancellationToken);
+        var result = await _productVariantService.CreateAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<ProductVariantDto> { Result = result });
     }
@@ -53,20 +41,7 @@ public sealed class ProductVariantController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductVariantDto>>> Update(string id, [FromBody] ProductVariantRequest request, CancellationToken cancellationToken)
     {
-        var result = await _productVariantService.UpdateAsync(id, new ProductVariantUpsertDto
-        {
-            ProductId = request.ProductId,
-            ColorName = request.ColorName,
-            FrameFinish = request.FrameFinish,
-            LensWidthMm = request.LensWidthMm,
-            BridgeWidthMm = request.BridgeWidthMm,
-            TempleLengthMm = request.TempleLengthMm,
-            SizeLabel = request.SizeLabel,
-            Price = request.Price,
-            Quantity = request.Quantity,
-            Status = request.Status,
-            OrderItemType = request.OrderItemType
-        }, cancellationToken);
+        var result = await _productVariantService.UpdateAsync(id, request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<ProductVariantDto> { Result = result });
     }
@@ -83,11 +58,7 @@ public sealed class ProductVariantController : ControllerBase
     [Authorize(Roles = "OPERATION,MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<InventoryUpdateResultDto>>> UpdateInventory([FromBody] InventoryUpdateRequest request, CancellationToken cancellationToken)
     {
-        var result = await _productVariantService.UpdateInventoryAsync(new InventoryUpdateDto
-        {
-            ProductVariantId = request.ProductVariantId,
-            ChangeAmount = request.ChangeAmount
-        }, cancellationToken);
+        var result = await _productVariantService.UpdateInventoryAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<InventoryUpdateResultDto> { Result = result });
     }

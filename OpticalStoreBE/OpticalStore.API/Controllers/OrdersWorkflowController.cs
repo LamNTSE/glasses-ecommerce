@@ -4,7 +4,9 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpticalStore.API.Requests.Orders;
 using OpticalStore.API.Responses;
+using OpticalStore.API.Swagger;
 using OpticalStore.BLL.Exceptions;
 using OpticalStore.DAL.DBContext;
 using OpticalStore.DAL.Entities;
@@ -27,6 +29,7 @@ public sealed class OrdersWorkflowController : ControllerBase
 
     [HttpPost("orders/create")]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
+    [SwaggerMultipartJsonPart("orderInfo", typeof(CreateOrderRequest))]
     public async Task<ActionResult<ApiResponse<object>>> CreateOrder(
         [FromForm] string orderInfo,
         [FromQuery(Name = "PaymentMethod")] string paymentMethod,
@@ -956,104 +959,4 @@ public sealed class OrdersWorkflowController : ControllerBase
         return status is "PENDING" or "PREPARING" or "AWAITING_VERIFICATION" or "ON_HOLD";
     }
 
-    public sealed class CreateOrderRequest
-    {
-        public string DeliveryAddress { get; set; } = string.Empty;
-
-        public string RecipientName { get; set; } = string.Empty;
-
-        public string PhoneNumber { get; set; } = string.Empty;
-
-        public List<CreateOrderItemRequest> Items { get; set; } = new();
-
-        public string? ComboId { get; set; }
-
-        public BankInfoRequest? BankInfo { get; set; }
-    }
-
-    public sealed class CreateOrderItemRequest
-    {
-        public string ProductVariantId { get; set; } = string.Empty;
-
-        public int Quantity { get; set; }
-
-        public string? LensId { get; set; }
-
-        public PrescriptionRequest? Prescription { get; set; }
-    }
-
-    public sealed class UpdateOrderRequest
-    {
-        public string? DeliveryAddress { get; set; }
-
-        public string? RecipientName { get; set; }
-
-        public string? PhoneNumber { get; set; }
-
-        public List<UpdateOrderItemRequest> Items { get; set; } = new();
-    }
-
-    public sealed class UpdateOrderItemRequest
-    {
-        public string OrderItemId { get; set; } = string.Empty;
-
-        public int Quantity { get; set; }
-
-        public PrescriptionRequest? Prescription { get; set; }
-    }
-
-    public sealed class PrescriptionRequest
-    {
-        public string? ImageUrl { get; set; }
-
-        public double? OdSphere { get; set; }
-
-        public double? OdCylinder { get; set; }
-
-        public int? OdAxis { get; set; }
-
-        public double? OdAdd { get; set; }
-
-        public double? OdPd { get; set; }
-
-        public double? OsSphere { get; set; }
-
-        public double? OsCylinder { get; set; }
-
-        public int? OsAxis { get; set; }
-
-        public double? OsAdd { get; set; }
-
-        public double? OsPd { get; set; }
-
-        public string? Note { get; set; }
-    }
-
-    public sealed class BankInfoRequest
-    {
-        public string? BankName { get; set; }
-
-        public string? BankAccountNumber { get; set; }
-
-        public string? AccountHolderName { get; set; }
-    }
-
-    public sealed class AcceptShipOrdersRequest
-    {
-        public List<string> OrderIds { get; set; } = new();
-    }
-
-    public sealed class PriceCheckRequest
-    {
-        public List<PriceCheckItemRequest> Items { get; set; } = new();
-
-        public string? ComboId { get; set; }
-    }
-
-    public sealed class PriceCheckItemRequest
-    {
-        public string ProductVariantId { get; set; } = string.Empty;
-
-        public int Quantity { get; set; }
-    }
 }

@@ -72,6 +72,7 @@ builder.Services.AddSwaggerGen(options =>
 	});
 
 	options.DocumentFilter<SortTagsDocumentFilter>();
+	options.OperationFilter<MultipartJsonRequestOperationFilter>();
 });
 
 // Configure CORS

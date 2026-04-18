@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Roles;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.DTOs.Common;
-using OpticalStore.BLL.DTOs.Roles;
 using OpticalStore.BLL.Services.Interfaces;
 
 namespace OpticalStore.API.Controllers;
@@ -24,12 +24,7 @@ public sealed class RolesController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ApiResponse<RoleDto>>> Create([FromBody] CreateRoleRequest request, CancellationToken cancellationToken)
     {
-        var result = await _roleService.CreateAsync(new CreateRoleDto
-        {
-            Name = request.Name,
-            Description = request.Description,
-            Permissions = request.Permissions
-        }, cancellationToken);
+        var result = await _roleService.CreateAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<RoleDto> { Result = result });
     }

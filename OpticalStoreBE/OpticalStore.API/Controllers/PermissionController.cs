@@ -1,9 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Permissions;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.DTOs.Common;
-using OpticalStore.BLL.DTOs.Permissions;
 using OpticalStore.BLL.Services.Interfaces;
 
 namespace OpticalStore.API.Controllers;
@@ -24,11 +24,7 @@ public sealed class PermissionsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<ApiResponse<PermissionDto>>> Create([FromBody] CreatePermissionRequest request, CancellationToken cancellationToken)
     {
-        var result = await _permissionService.CreateAsync(new CreatePermissionDto
-        {
-            Name = request.Name,
-            Description = request.Description
-        }, cancellationToken);
+        var result = await _permissionService.CreateAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<PermissionDto> { Result = result });
     }

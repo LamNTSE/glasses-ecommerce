@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Lenses;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.DTOs.Lenses;
@@ -23,13 +24,7 @@ public sealed class LensController : ControllerBase
     [Authorize(Roles = "OPERATION,ADMIN")]
     public async Task<ActionResult<ApiResponse<LensResponseDto>>> Create([FromBody] CreateLensRequest request, CancellationToken cancellationToken)
     {
-        var result = await _lensService.CreateAsync(new CreateLensDto
-        {
-            Name = request.Name,
-            Material = request.Material,
-            Price = request.Price,
-            Description = request.Description
-        }, cancellationToken);
+        var result = await _lensService.CreateAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<LensResponseDto>
         {

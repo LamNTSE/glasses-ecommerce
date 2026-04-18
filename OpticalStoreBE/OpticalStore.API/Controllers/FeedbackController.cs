@@ -4,7 +4,9 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpticalStore.API.Requests.Feedbacks;
 using OpticalStore.API.Responses;
+using OpticalStore.API.Swagger;
 using OpticalStore.BLL.Exceptions;
 using OpticalStore.DAL.DBContext;
 using OpticalStore.DAL.Entities;
@@ -25,6 +27,7 @@ public sealed class FeedbackController : ControllerBase
 
     [HttpPost]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
+    [SwaggerMultipartJsonPart("feedback", typeof(FeedbackCreateRequest))]
     public async Task<ActionResult<ApiResponse<object>>> Create([FromForm] string feedback, List<IFormFile>? images, CancellationToken cancellationToken)
     {
         var request = JsonSerializer.Deserialize<FeedbackCreateRequest>(feedback, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
@@ -100,6 +103,7 @@ public sealed class FeedbackController : ControllerBase
 
     [HttpPut("{feedbackId}")]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
+    [SwaggerMultipartJsonPart("feedback", typeof(FeedbackUpdateRequest))]
     public async Task<ActionResult<ApiResponse<object>>> Update(string feedbackId, [FromForm] string feedback, List<IFormFile>? images, CancellationToken cancellationToken)
     {
         var request = JsonSerializer.Deserialize<FeedbackUpdateRequest>(feedback, new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
@@ -264,23 +268,6 @@ public sealed class FeedbackController : ControllerBase
             ?? throw new AppException("UNAUTHENTICATED", "Missing userId claim.", HttpStatusCode.Unauthorized);
     }
 
-    public sealed class FeedbackCreateRequest
-    {
-        public string OrderId { get; set; } = string.Empty;
-
-        public string ProductId { get; set; } = string.Empty;
-
-        public int Rating { get; set; }
-
-        public string? Comment { get; set; }
-    }
-
-    public sealed class FeedbackUpdateRequest
-    {
-        public int? Rating { get; set; }
-
-        public string? Comment { get; set; }
-    }
 }
 
 

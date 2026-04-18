@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpticalStore.API.Requests.Combos;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.Exceptions;
 using OpticalStore.DAL.DBContext;
@@ -476,52 +477,6 @@ public sealed class ComboController : ControllerBase
         }
     }
 
-    public sealed class ComboUpsertRequest
-    {
-        public string Name { get; set; } = string.Empty;
-
-        public string? Description { get; set; }
-
-        public string DiscountType { get; set; } = "PERCENT";
-
-        public decimal DiscountValue { get; set; }
-
-        public DateTime StartTime { get; set; }
-
-        public DateTime EndTime { get; set; }
-
-        public bool? IsManuallyDisabled { get; set; }
-
-        public List<ComboItemRequest>? ComboItems { get; set; }
-    }
-
-    public sealed class ComboItemRequest
-    {
-        public string? ProductId { get; set; }
-
-        public string? SkuId { get; set; }
-
-        public int? RequiredQuantity { get; set; }
-    }
-
-    public sealed class ComboStatusRequest
-    {
-        public string Status { get; set; } = string.Empty;
-    }
-
-    public sealed class ComboValidateRequest
-    {
-        public string ComboId { get; set; } = string.Empty;
-
-        public List<CartItemRequest> CartItems { get; set; } = new();
-    }
-
-    public sealed class CartItemRequest
-    {
-        public string SkuId { get; set; } = string.Empty;
-
-        public int Quantity { get; set; }
-    }
 }
 
 

@@ -2,6 +2,7 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Notifications;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.DTOs.Notifications;
@@ -54,12 +55,7 @@ public sealed class NotificationController : ControllerBase
     public async Task<ActionResult<ApiResponse<NotificationResponseDto>>> Create([FromBody] CreateNotificationRequest request, CancellationToken cancellationToken)
     {
         var senderId = User.FindFirstValue("userId") ?? "SYSTEM";
-        var result = await _notificationService.CreateAsync(senderId, new CreateNotificationDto
-        {
-            RecipientId = request.RecipientId,
-            Title = request.Title,
-            Content = request.Content
-        }, cancellationToken);
+        var result = await _notificationService.CreateAsync(senderId, request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<NotificationResponseDto> { Result = result });
     }

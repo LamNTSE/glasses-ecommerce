@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Policies;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.DTOs.Common;
@@ -26,7 +27,7 @@ public sealed class PolicyController : ControllerBase
     public async Task<ActionResult<ApiResponse<PolicyResponseDto>>> Create([FromBody] PolicyUpsertRequest request, CancellationToken cancellationToken)
     {
         var managerUserId = User.FindFirstValue("userId") ?? string.Empty;
-        var result = await _policyService.CreateAsync(managerUserId, MapRequest(request), cancellationToken);
+        var result = await _policyService.CreateAsync(managerUserId, request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<PolicyResponseDto>
         {
@@ -39,7 +40,7 @@ public sealed class PolicyController : ControllerBase
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<PolicyResponseDto>>> Update(int id, [FromBody] PolicyUpsertRequest request, CancellationToken cancellationToken)
     {
-        var result = await _policyService.UpdateAsync(id, MapRequest(request), cancellationToken);
+        var result = await _policyService.UpdateAsync(id, request.ToDto(), cancellationToken);
         return Ok(new ApiResponse<PolicyResponseDto> { Result = result });
     }
 
@@ -79,17 +80,6 @@ public sealed class PolicyController : ControllerBase
         return Ok(new ApiResponse<PagedResultDto<PolicyResponseDto>> { Result = result });
     }
 
-    private static PolicyUpsertDto MapRequest(PolicyUpsertRequest request)
-    {
-        return new PolicyUpsertDto
-        {
-            Code = request.Code,
-            Title = request.Title,
-            Description = request.Description,
-            EffectiveFrom = request.EffectiveFrom,
-            EffectiveTo = request.EffectiveTo
-        };
-    }
 }
 
 

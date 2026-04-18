@@ -2,6 +2,7 @@ using System.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using OpticalStore.API.Requests.Payments;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.Exceptions;
 using OpticalStore.DAL.DBContext;
@@ -207,17 +208,4 @@ public sealed class PaymentController : ControllerBase
         return Ok(new ApiResponse<List<object>> { Result = result });
     }
 
-    public sealed class PaymentRequirementRequest
-    {
-        public List<PaymentRequirementItemRequest> Items { get; set; } = new();
-    }
-
-    public sealed class PaymentRequirementItemRequest
-    {
-        public string? ProductVariantId { get; set; }
-
-        public string? LensId { get; set; }
-
-        public int Quantity { get; set; }
-    }
 }

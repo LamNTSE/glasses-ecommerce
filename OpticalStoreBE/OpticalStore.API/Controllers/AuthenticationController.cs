@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Auth;
 using OpticalStore.API.Responses;
 using OpticalStore.BLL.DTOs.Auth;
@@ -22,13 +23,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<AuthResultDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<AuthResultDto>>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
     {
-        var result = await _authService.LoginAsync(
-            new LoginRequestDto
-            {
-                Username = request.Username,
-                Password = request.Password
-            },
-            cancellationToken);
+        var result = await _authService.LoginAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<AuthResultDto>
         {
@@ -40,9 +35,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<IntrospectResultDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<IntrospectResultDto>>> Introspect([FromBody] TokenRequest request, CancellationToken cancellationToken)
     {
-        var result = await _authService.IntrospectAsync(
-            new TokenRequestDto { Token = request.Token },
-            cancellationToken);
+        var result = await _authService.IntrospectAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<IntrospectResultDto>
         {
@@ -54,9 +47,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<AuthResultDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<AuthResultDto>>> Refresh([FromBody] TokenRequest request, CancellationToken cancellationToken)
     {
-        var result = await _authService.RefreshAsync(
-            new TokenRequestDto { Token = request.Token },
-            cancellationToken);
+        var result = await _authService.RefreshAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<AuthResultDto>
         {
@@ -68,9 +59,7 @@ public sealed class AuthController : ControllerBase
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<object>>> Logout([FromBody] TokenRequest request, CancellationToken cancellationToken)
     {
-        await _authService.LogoutAsync(
-            new TokenRequestDto { Token = request.Token },
-            cancellationToken);
+        await _authService.LogoutAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<object>
         {
