@@ -3,15 +3,14 @@ using System.Net;
 using System.Security.Claims;
 using System.Text;
 using BCrypt.Net;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using OpticalStore.BLL.Configuration;
 using OpticalStore.BLL.DTOs.Auth;
 using OpticalStore.BLL.Exceptions;
 using OpticalStore.BLL.Services.Interfaces;
-using OpticalStore.DAL.DBContext;
 using OpticalStore.DAL.Entities;
+using OpticalStore.DAL.Repositories.Interfaces;
 
 namespace OpticalStore.BLL.Services;
 
@@ -19,13 +18,18 @@ public sealed class AuthService : IAuthService
 {
     private static readonly JwtSecurityTokenHandler TokenHandler = new();
 
-    private readonly OpticalStoreDbContext _dbContext;
+    private readonly IUserRepository _userRepository;
+    private readonly IInvalidatedTokenRepository _invalidatedTokenRepository;
     private readonly JwtOptions _jwtOptions;
     private readonly TokenValidationParameters _tokenValidationParameters;
 
-    public AuthService(OpticalStoreDbContext dbContext, IOptions<JwtOptions> jwtOptions)
+    public AuthService(
+        IUserRepository userRepository,
+        IInvalidatedTokenRepository invalidatedTokenRepository,
+        IOptions<JwtOptions> jwtOptions)
     {
-        _dbContext = dbContext;
+        _userRepository = userRepository;
+        _invalidatedTokenRepository = invalidatedTokenRepository;
         _jwtOptions = jwtOptions.Value;
 
         if (string.IsNullOrWhiteSpace(_jwtOptions.Key) || Encoding.UTF8.GetByteCount(_jwtOptions.Key) < 32)
@@ -50,10 +54,7 @@ public sealed class AuthService : IAuthService
     public async Task<AuthResultDto> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
     {
         var normalizedUsername = request.Username.Trim();
-        var user = await _dbContext.Users
-            .Include(x => x.RoleNames)
-            .ThenInclude(x => x.PermissionsNames)
-            .FirstOrDefaultAsync(x => x.Username == normalizedUsername, cancellationToken);
+        var user = await _userRepository.GetByUsernameWithSecurityAsync(normalizedUsername, cancellationToken);
 
         if (user is null || string.IsNullOrWhiteSpace(user.Password) || !BCrypt.Net.BCrypt.Verify(request.Password, user.Password))
         {
@@ -92,10 +93,7 @@ public sealed class AuthService : IAuthService
             throw new AppException("UNAUTHENTICATED", "Invalid token subject.", HttpStatusCode.Unauthorized);
         }
 
-        var user = await _dbContext.Users
-            .Include(x => x.RoleNames)
-            .ThenInclude(x => x.PermissionsNames)
-            .FirstOrDefaultAsync(x => x.Username == username, cancellationToken);
+        var user = await _userRepository.GetByUsernameWithSecurityAsync(username, cancellationToken);
 
         if (user is null)
         {
@@ -209,7 +207,7 @@ public sealed class AuthService : IAuthService
             throw new AppException("UNAUTHENTICATED", "Token ID is missing.", HttpStatusCode.Unauthorized);
         }
 
-        var tokenIsInvalidated = await _dbContext.InvalidatedTokens.AnyAsync(x => x.Id == jti, cancellationToken);
+        var tokenIsInvalidated = await _invalidatedTokenRepository.ExistsAsync(jti, cancellationToken);
         if (tokenIsInvalidated)
         {
             throw new AppException("UNAUTHENTICATED", "Token is invalidated.", HttpStatusCode.Unauthorized);
@@ -226,7 +224,7 @@ public sealed class AuthService : IAuthService
             return;
         }
 
-        var existed = await _dbContext.InvalidatedTokens.AnyAsync(x => x.Id == jti, cancellationToken);
+        var existed = await _invalidatedTokenRepository.ExistsAsync(jti, cancellationToken);
         if (existed)
         {
             return;
@@ -240,12 +238,12 @@ public sealed class AuthService : IAuthService
             expiryTime = DateTimeOffset.FromUnixTimeSeconds(expUnix).UtcDateTime;
         }
 
-        _dbContext.InvalidatedTokens.Add(new InvalidatedToken
+        await _invalidatedTokenRepository.AddAsync(new InvalidatedToken
         {
             Id = jti,
             ExpiryTime = expiryTime
-        });
+        }, cancellationToken);
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _invalidatedTokenRepository.SaveChangesAsync(cancellationToken);
     }
 }

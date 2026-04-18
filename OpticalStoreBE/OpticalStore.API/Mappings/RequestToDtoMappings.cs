@@ -1,6 +1,8 @@
 using OpticalStore.API.Requests.Auth;
+using OpticalStore.API.Requests.Feedbacks;
 using OpticalStore.API.Requests.Lenses;
 using OpticalStore.API.Requests.Notifications;
+using OpticalStore.API.Requests.Payments;
 using OpticalStore.API.Requests.Permissions;
 using OpticalStore.API.Requests.Policies;
 using OpticalStore.API.Requests.Products;
@@ -8,8 +10,10 @@ using OpticalStore.API.Requests.ProductVariants;
 using OpticalStore.API.Requests.Roles;
 using OpticalStore.API.Requests.Users;
 using OpticalStore.BLL.DTOs.Auth;
+using OpticalStore.BLL.DTOs.Feedbacks;
 using OpticalStore.BLL.DTOs.Lenses;
 using OpticalStore.BLL.DTOs.Notifications;
+using OpticalStore.BLL.DTOs.Payments;
 using OpticalStore.BLL.DTOs.Permissions;
 using OpticalStore.BLL.DTOs.Policies;
 using OpticalStore.BLL.DTOs.Products;
@@ -146,6 +150,44 @@ public static class RequestToDtoMappings
             RecipientId = request.RecipientId,
             Title = request.Title,
             Content = request.Content
+        };
+    }
+
+    public static PaymentRequirementDto ToDto(this PaymentRequirementRequest request)
+    {
+        return new PaymentRequirementDto
+        {
+            Items = request.Items.Select(x => x.ToDto()).ToList()
+        };
+    }
+
+    public static PaymentRequirementItemDto ToDto(this PaymentRequirementItemRequest request)
+    {
+        return new PaymentRequirementItemDto
+        {
+            ProductVariantId = request.ProductVariantId,
+            LensId = request.LensId,
+            Quantity = request.Quantity
+        };
+    }
+
+    public static FeedbackCreateDto ToDto(this FeedbackCreateRequest request)
+    {
+        return new FeedbackCreateDto
+        {
+            OrderId = request.OrderId,
+            ProductId = request.ProductId,
+            Rating = request.Rating,
+            Comment = request.Comment
+        };
+    }
+
+    public static FeedbackUpdateDto ToDto(this FeedbackUpdateRequest request)
+    {
+        return new FeedbackUpdateDto
+        {
+            Rating = request.Rating,
+            Comment = request.Comment
         };
     }
 

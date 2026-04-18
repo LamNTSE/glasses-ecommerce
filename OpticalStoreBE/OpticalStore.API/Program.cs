@@ -6,6 +6,7 @@ using Microsoft.OpenApi.Models;
 using OpticalStore.API.Middleware;
 using OpticalStore.API.Swagger;
 using OpticalStore.BLL;
+using OpticalStore.BLL.Configuration;
 
 // Chỉ nạp .env cho local development để tránh phụ thuộc file này trên cloud.
 var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
@@ -31,10 +32,16 @@ if (string.IsNullOrWhiteSpace(defaultConnection))
 }
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
-var jwtKey = jwtSection.GetValue<string>("Key");
-if (string.IsNullOrWhiteSpace(jwtKey))
+var jwtOptions = jwtSection.Get<JwtOptions>() ?? new JwtOptions();
+
+if (string.IsNullOrWhiteSpace(jwtOptions.Key) || Encoding.UTF8.GetByteCount(jwtOptions.Key) < 32)
 {
-    throw new InvalidOperationException("CRITICAL ERROR: Jwt:Key is missing from environment. Must provide a base64 encoded string or a string of appropriate length.");
+	throw new InvalidOperationException("CRITICAL ERROR: Jwt:Key is missing or shorter than 32 bytes.");
+}
+
+if (string.IsNullOrWhiteSpace(jwtOptions.Issuer) || string.IsNullOrWhiteSpace(jwtOptions.Audience))
+{
+	throw new InvalidOperationException("CRITICAL ERROR: Jwt:Issuer and Jwt:Audience are required.");
 }
 
 builder.Services.AddControllers();
@@ -107,9 +114,9 @@ builder.Services.AddAuthentication(options =>
 			ValidateAudience = true,
 			ValidateLifetime = true,
 			ValidateIssuerSigningKey = true,
-			ValidIssuer = jwtSection.GetValue<string>("Issuer"),
-			ValidAudience = jwtSection.GetValue<string>("Audience"),
-			IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+			ValidIssuer = jwtOptions.Issuer,
+			ValidAudience = jwtOptions.Audience,
+			IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.Key))
 		};
 	});
 
