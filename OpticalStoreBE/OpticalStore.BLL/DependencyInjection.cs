@@ -20,8 +20,11 @@ public static class DependencyInjection
         services.AddScoped<ILensService, LensService>();
         services.AddScoped<IProductService, ProductService>();
         services.AddScoped<IProductVariantService, ProductVariantService>();
+        services.AddScoped<IComboWorkflowService, ComboWorkflowService>();
         services.AddScoped<IPaymentWorkflowService, PaymentWorkflowService>();
+        services.AddScoped<IRefundWorkflowService, RefundWorkflowService>();
         services.AddScoped<IFeedbackWorkflowService, FeedbackWorkflowService>();
+        services.AddScoped<IOrdersWorkflowService, OrdersWorkflowService>();
         services.AddScoped<IPolicyService, PolicyService>();
         services.AddScoped<INotificationService, NotificationService>();
         services.AddScoped<IDashboardService, DashboardService>();

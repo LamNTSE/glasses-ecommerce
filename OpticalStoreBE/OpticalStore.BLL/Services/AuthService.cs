@@ -151,7 +151,7 @@ public sealed class AuthService : IAuthService
 
         var credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtOptions.Key)),
-            SecurityAlgorithms.HmacSha512);
+            SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
             issuer: _jwtOptions.Issuer,
@@ -186,7 +186,7 @@ public sealed class AuthService : IAuthService
         var principal = TokenHandler.ValidateToken(token, validationParameters, out var validatedToken);
 
         if (validatedToken is not JwtSecurityToken jwt ||
-            !jwt.Header.Alg.Equals(SecurityAlgorithms.HmacSha512, StringComparison.OrdinalIgnoreCase))
+            !jwt.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.OrdinalIgnoreCase))
         {
             throw new AppException("UNAUTHENTICATED", "Invalid token algorithm.", HttpStatusCode.Unauthorized);
         }
