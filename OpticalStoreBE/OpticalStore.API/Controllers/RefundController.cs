@@ -8,6 +8,7 @@ using OpticalStore.BLL.Services.Interfaces;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
+[ApiExplorerSettings(IgnoreApi = true)]
 [Route("refund")]
 [Tags("11. Refund")]
 public sealed class RefundController : ControllerBase

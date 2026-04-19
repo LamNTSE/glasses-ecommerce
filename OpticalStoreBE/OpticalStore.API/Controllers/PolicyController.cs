@@ -11,6 +11,7 @@ using OpticalStore.BLL.Services.Interfaces;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
+[ApiExplorerSettings(IgnoreApi = true)]
 [Route("api/policies")]
 [Tags("12. Policies")]
 public sealed class PolicyController : ControllerBase

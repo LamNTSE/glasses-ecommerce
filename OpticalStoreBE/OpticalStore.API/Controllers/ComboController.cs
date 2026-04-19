@@ -8,6 +8,7 @@ using OpticalStore.BLL.Services.Interfaces;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
+[ApiExplorerSettings(IgnoreApi = true)]
 [Route("api/combos")]
 [Tags("08. Combos")]
 public sealed class ComboController : ControllerBase

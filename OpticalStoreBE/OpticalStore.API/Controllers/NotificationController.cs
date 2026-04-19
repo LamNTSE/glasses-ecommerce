@@ -11,6 +11,7 @@ using OpticalStore.BLL.Services.Interfaces;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
+[ApiExplorerSettings(IgnoreApi = true)]
 [Route("notifications")]
 [Tags("13. Notifications")]
 public sealed class NotificationController : ControllerBase
