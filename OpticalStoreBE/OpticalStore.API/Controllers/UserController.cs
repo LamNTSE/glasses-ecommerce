@@ -127,6 +127,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateStatus(
         string id,
@@ -138,6 +139,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpPut("{id}/role")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateRole(
         string id,
@@ -149,6 +151,7 @@ public sealed class UsersController : ControllerBase
     }
 
     [HttpDelete("{userId}")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<string>>> Delete(string userId, CancellationToken cancellationToken)
     {

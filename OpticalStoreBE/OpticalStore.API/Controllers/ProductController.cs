@@ -75,6 +75,7 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpGet("filter")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<PagedResultDto<ProductResponseDto>>>> Filter(
         [FromQuery] string? q,
@@ -127,6 +128,7 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> Delete(string id, CancellationToken cancellationToken)
     {
@@ -139,6 +141,7 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpPost("{productId}/images")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<List<ProductImageDto>>>> UploadImages(
         string productId,
@@ -155,6 +158,7 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpDelete("images/{imageId}")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> DeleteImage(string imageId, CancellationToken cancellationToken)
     {
@@ -167,6 +171,7 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpGet("{productId}/variants")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<PagedResultDto<ProductVariantDto>>>> GetVariants(
         string productId,
@@ -195,6 +200,7 @@ public sealed class ProductsController : ControllerBase
     }
 
     [HttpPost("{productId}/model")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<ProductResponseDto>>> UploadModel(
         string productId,

@@ -38,6 +38,7 @@ public sealed class ProductVariantController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductVariantDto>>> Update(string id, [FromBody] ProductVariantRequest request, CancellationToken cancellationToken)
     {
@@ -47,6 +48,7 @@ public sealed class ProductVariantController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<object>>> Delete(string id, CancellationToken cancellationToken)
     {
