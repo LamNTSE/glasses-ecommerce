@@ -101,19 +101,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             });
         }
 
-        if (!string.IsNullOrWhiteSpace(request.ComboId))
-        {
-            var combo = await _dbContext.Combos.FirstOrDefaultAsync(x => x.Id == request.ComboId && !(x.IsDeleted ?? false), cancellationToken);
-            if (combo is not null && combo.Status == "ACTIVE" && !combo.IsManuallyDisabled && combo.StartTime <= DateTime.UtcNow && combo.EndTime >= DateTime.UtcNow)
-            {
-                order.ComboId = combo.Id;
-                order.ComboDiscountAmount = string.Equals(combo.DiscountType, "FIXED_AMOUNT", StringComparison.OrdinalIgnoreCase)
-                    ? combo.DiscountValue
-                    : Math.Round(total * combo.DiscountValue / 100m, 2, MidpointRounding.AwayFromZero);
-            }
-        }
-
-        var finalTotal = Math.Max(0m, total - (order.ComboDiscountAmount ?? 0m));
+        var finalTotal = Math.Max(0m, total);
         var deposit = orderItems.Sum(x => x.DepositPrice ?? 0m);
 
         order.TotalAmount = finalTotal;
@@ -240,7 +228,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             }
         }
 
-        order.TotalAmount = order.OrderItems.Sum(x => x.TotalPrice ?? 0m) - (order.ComboDiscountAmount ?? 0m);
+        order.TotalAmount = order.OrderItems.Sum(x => x.TotalPrice ?? 0m);
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await BuildOrderResponse(orderId, cancellationToken);
@@ -398,68 +386,13 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
-    public async Task<List<object>> AcceptShipOrdersAsync(AcceptShipOrdersDto request, string shipperId, CancellationToken cancellationToken = default)
-    {
-        var result = new List<object>();
-
-        foreach (var orderId in request.OrderIds)
-        {
-            var order = await GetOrder(orderId, cancellationToken);
-            order.Status = "SHIPPED";
-            order.ShipperId = shipperId;
-            order.ShippedAt = DateTime.UtcNow;
-            result.Add(await BuildOrderResponse(orderId, cancellationToken));
-        }
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
-        return result;
-    }
-
-    public async Task<PagedResultDto<object>> GetMyAcceptedShipOrdersAsync(
-        string shipperId,
-        int page,
-        int size,
-        string sortBy,
-        string sortDir,
-        CancellationToken cancellationToken = default)
-    {
-        var query = _dbContext.Orders.Where(x => x.ShipperId == shipperId && (x.Status == "SHIPPED" || x.Status == "DELIVERING"));
-
-        var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
-        query = sortBy.Trim().ToLower() switch
-        {
-            "totalamount" => desc ? query.OrderByDescending(x => x.TotalAmount) : query.OrderBy(x => x.TotalAmount),
-            _ => desc ? query.OrderByDescending(x => x.CreatedAt) : query.OrderBy(x => x.CreatedAt)
-        };
-
-        var safePage = Math.Max(0, page);
-        var safeSize = Math.Clamp(size, 1, 200);
-        var totalElements = await query.LongCountAsync(cancellationToken);
-        var orderIds = await query.Skip(safePage * safeSize).Take(safeSize).Select(x => x.Id).ToListAsync(cancellationToken);
-
-        var items = new List<object>();
-        foreach (var orderId in orderIds)
-        {
-            items.Add(await BuildOrderResponse(orderId, cancellationToken));
-        }
-
-        return new PagedResultDto<object>
-        {
-            Items = items,
-            Page = safePage,
-            Size = safeSize,
-            TotalElements = totalElements,
-            TotalPages = (int)Math.Ceiling(totalElements / (double)safeSize)
-        };
-    }
-
-    public async Task<object> StartDeliveryAsync(string orderId, string shipperId, CancellationToken cancellationToken = default)
+    public async Task<object> StartDeliveryAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
 
-        if (order.ShipperId != shipperId)
+        if (order.Status is not ("PRODUCED" or "SHIPPED"))
         {
-            throw new AppException("FORBIDDEN", "Order is not assigned to current shipper.", HttpStatusCode.Forbidden);
+            throw new AppException("INVALID_ORDER_STATUS", "Order cannot start delivery in current status.", HttpStatusCode.BadRequest);
         }
 
         order.Status = "DELIVERING";
@@ -468,13 +401,13 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
-    public async Task<object> ConfirmDeliveredAsync(string orderId, string shipperId, CancellationToken cancellationToken = default)
+    public async Task<object> ConfirmDeliveredAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
 
-        if (order.ShipperId != shipperId)
+        if (order.Status != "DELIVERING")
         {
-            throw new AppException("FORBIDDEN", "Order is not assigned to current shipper.", HttpStatusCode.Forbidden);
+            throw new AppException("INVALID_ORDER_STATUS", "Order cannot be marked as delivered in current status.", HttpStatusCode.BadRequest);
         }
 
         order.Status = "DELIVERED";
@@ -541,29 +474,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             });
         }
 
-        decimal comboDiscount = 0m;
+        const decimal comboDiscount = 0m;
         var warnings = new List<object>();
-
-        if (!string.IsNullOrWhiteSpace(request.ComboId))
-        {
-            var combo = await _dbContext.Combos.Include(x => x.ComboItems).ThenInclude(x => x.ProductVariant)
-                .FirstOrDefaultAsync(x => x.Id == request.ComboId && !(x.IsDeleted ?? false), cancellationToken);
-
-            if (combo is null)
-            {
-                warnings.Add(new { type = "COMBO_NOT_FOUND", message = "Combo not found", threshold = 0m, actualValue = 0m });
-            }
-            else if (combo.Status != "ACTIVE" || combo.IsManuallyDisabled || combo.StartTime > DateTime.UtcNow || combo.EndTime < DateTime.UtcNow)
-            {
-                warnings.Add(new { type = "COMBO_NOT_ACTIVE", message = "Combo is not active", threshold = 0m, actualValue = 0m });
-            }
-            else
-            {
-                comboDiscount = string.Equals(combo.DiscountType, "FIXED_AMOUNT", StringComparison.OrdinalIgnoreCase)
-                    ? combo.DiscountValue
-                    : Math.Round(originalTotal * combo.DiscountValue / 100m, 2, MidpointRounding.AwayFromZero);
-            }
-        }
 
         var finalTotal = Math.Max(0m, originalTotal - comboDiscount);
         var isValid = true;
@@ -675,7 +587,6 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 #pragma warning disable CS8602
         var order = await _dbContext.Orders
             .Include(x => x.Customer)
-            .Include(x => x.Combo)
             .Include(x => x.Payments)
             .Include(x => x.OrderItems)
                 .ThenInclude(x => x.ProductVariant)
@@ -739,13 +650,6 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             paidAmount = order.Payments.Where(x => x.Status == "PAID").Sum(x => x.Amount ?? 0m),
             items = itemResults,
             payments,
-            shipperInfo = order.ShipperId is null ? null : new { shipperId = order.ShipperId },
-            comboId = order.ComboId,
-            comboName = order.Combo?.Name,
-            comboDiscountAmount = order.ComboDiscountAmount,
-            comboSnapshot = order.ComboSnapshot,
-            refundedAmount = order.RefundRequests.Sum(x => x.RefundAmount ?? 0m),
-            finalTotalAfterRefund = (order.TotalAmount ?? 0m) - order.RefundRequests.Sum(x => x.RefundAmount ?? 0m),
             bankInfo = new
             {
                 bankName = order.BankName,

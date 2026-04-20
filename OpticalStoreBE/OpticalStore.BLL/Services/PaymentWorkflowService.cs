@@ -150,10 +150,6 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
                 payment.Order.PreOrderStatus = "REMAINING_PAID";
                 payment.Order.Status = "PREPARING";
             }
-            else if (payment.PaymentPurpose == "REFUND")
-            {
-                payment.Order.Status = "REFUNDED";
-            }
             else
             {
                 payment.Order.Status = "PREPARING";

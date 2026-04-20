@@ -33,13 +33,9 @@ public interface IOrdersWorkflowService
 
     Task<object> UpdateItemStatusAsync(string orderItemId, string status, CancellationToken cancellationToken = default);
 
-    Task<List<object>> AcceptShipOrdersAsync(AcceptShipOrdersDto request, string shipperId, CancellationToken cancellationToken = default);
+    Task<object> StartDeliveryAsync(string orderId, CancellationToken cancellationToken = default);
 
-    Task<PagedResultDto<object>> GetMyAcceptedShipOrdersAsync(string shipperId, int page, int size, string sortBy, string sortDir, CancellationToken cancellationToken = default);
-
-    Task<object> StartDeliveryAsync(string orderId, string shipperId, CancellationToken cancellationToken = default);
-
-    Task<object> ConfirmDeliveredAsync(string orderId, string shipperId, CancellationToken cancellationToken = default);
+    Task<object> ConfirmDeliveredAsync(string orderId, CancellationToken cancellationToken = default);
 
     Task<PagedResultDto<object>> GetCancelledPaidOrdersAsync(int page, int size, string sortBy, string sortDir, CancellationToken cancellationToken = default);
 

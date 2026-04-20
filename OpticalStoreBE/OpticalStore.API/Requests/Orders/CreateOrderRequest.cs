@@ -10,7 +10,5 @@ public sealed class CreateOrderRequest
 
     public List<CreateOrderItemRequest> Items { get; set; } = new();
 
-    public string? ComboId { get; set; }
-
     public BankInfoRequest? BankInfo { get; set; }
 }

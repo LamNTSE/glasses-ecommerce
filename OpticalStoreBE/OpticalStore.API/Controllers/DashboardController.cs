@@ -7,7 +7,6 @@ using OpticalStore.BLL.Services.Interfaces;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
-[ApiExplorerSettings(IgnoreApi = true)]
 [Route("dashboard")]
 [Tags("15. Dashboard")]
 public sealed class DashboardController : ControllerBase

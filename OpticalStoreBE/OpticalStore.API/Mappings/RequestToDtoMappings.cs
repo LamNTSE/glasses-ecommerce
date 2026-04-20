@@ -1,29 +1,23 @@
 using OpticalStore.API.Requests.Auth;
-using OpticalStore.API.Requests.Combos;
 using OpticalStore.API.Requests.Feedbacks;
 using OpticalStore.API.Requests.Lenses;
 using OpticalStore.API.Requests.Notifications;
 using OpticalStore.API.Requests.Orders;
 using OpticalStore.API.Requests.Payments;
 using OpticalStore.API.Requests.Permissions;
-using OpticalStore.API.Requests.Policies;
 using OpticalStore.API.Requests.Products;
 using OpticalStore.API.Requests.ProductVariants;
-using OpticalStore.API.Requests.Refunds;
 using OpticalStore.API.Requests.Roles;
 using OpticalStore.API.Requests.Users;
 using OpticalStore.BLL.DTOs.Auth;
-using OpticalStore.BLL.DTOs.Combos;
 using OpticalStore.BLL.DTOs.Feedbacks;
 using OpticalStore.BLL.DTOs.Lenses;
 using OpticalStore.BLL.DTOs.Notifications;
 using OpticalStore.BLL.DTOs.Orders;
 using OpticalStore.BLL.DTOs.Payments;
 using OpticalStore.BLL.DTOs.Permissions;
-using OpticalStore.BLL.DTOs.Policies;
 using OpticalStore.BLL.DTOs.Products;
 using OpticalStore.BLL.DTOs.ProductVariants;
-using OpticalStore.BLL.DTOs.Refunds;
 using OpticalStore.BLL.DTOs.Roles;
 using OpticalStore.BLL.DTOs.Users;
 
@@ -197,69 +191,6 @@ public static class RequestToDtoMappings
         };
     }
 
-    public static ComboUpsertDto ToDto(this ComboUpsertRequest request)
-    {
-        return new ComboUpsertDto
-        {
-            Name = request.Name,
-            Description = request.Description,
-            DiscountType = request.DiscountType,
-            DiscountValue = request.DiscountValue,
-            StartTime = request.StartTime,
-            EndTime = request.EndTime,
-            IsManuallyDisabled = request.IsManuallyDisabled,
-            ComboItems = request.ComboItems?.Select(x => x.ToDto()).ToList()
-        };
-    }
-
-    public static ComboValidateDto ToDto(this ComboValidateRequest request)
-    {
-        return new ComboValidateDto
-        {
-            ComboId = request.ComboId,
-            CartItems = request.CartItems.Select(x => x.ToDto()).ToList()
-        };
-    }
-
-    public static ComboItemDto ToDto(this ComboItemRequest request)
-    {
-        return new ComboItemDto
-        {
-            ProductId = request.ProductId,
-            SkuId = request.SkuId,
-            RequiredQuantity = request.RequiredQuantity
-        };
-    }
-
-    public static CartItemDto ToDto(this CartItemRequest request)
-    {
-        return new CartItemDto
-        {
-            SkuId = request.SkuId,
-            Quantity = request.Quantity
-        };
-    }
-
-    public static PolicyUpsertDto ToDto(this PolicyUpsertRequest request)
-    {
-        return new PolicyUpsertDto
-        {
-            Code = request.Code,
-            Title = request.Title,
-            Description = request.Description,
-            EffectiveFrom = request.EffectiveFrom,
-            EffectiveTo = request.EffectiveTo
-        };
-    }
-
-    public static RefundBatchDto ToDto(this RefundBatchRequest request)
-    {
-        return new RefundBatchDto
-        {
-            OrderIds = request.OrderIds
-        };
-    }
-
     public static CreateOrderDto ToDto(this CreateOrderRequest request)
     {
         return new CreateOrderDto
@@ -268,7 +199,6 @@ public static class RequestToDtoMappings
             RecipientName = request.RecipientName,
             PhoneNumber = request.PhoneNumber,
             Items = request.Items.Select(x => x.ToDto()).ToList(),
-            ComboId = request.ComboId,
             BankInfo = request.BankInfo?.ToDto()
         };
     }
@@ -328,7 +258,6 @@ public static class RequestToDtoMappings
     {
         return new PriceCheckDto
         {
-            ComboId = request.ComboId,
             Items = request.Items.Select(x => x.ToDto()).ToList()
         };
     }
@@ -339,14 +268,6 @@ public static class RequestToDtoMappings
         {
             ProductVariantId = request.ProductVariantId,
             Quantity = request.Quantity
-        };
-    }
-
-    public static AcceptShipOrdersDto ToDto(this AcceptShipOrdersRequest request)
-    {
-        return new AcceptShipOrdersDto
-        {
-            OrderIds = request.OrderIds
         };
     }
 

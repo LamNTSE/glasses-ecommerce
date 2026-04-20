@@ -126,7 +126,6 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpPut("sales/orders/{orderId}/revert-verify")]
-    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "SALE,ADMIN,MANAGER")]
     public async Task<ActionResult<ApiResponse<object>>> RevertVerifyOrder(string orderId, CancellationToken cancellationToken)
     {
@@ -166,49 +165,24 @@ public sealed class OrdersWorkflowController : ControllerBase
         return Ok(new ApiResponse<object> { Result = result });
     }
 
-    [HttpPatch("ship/orders/accept")]
-    [Authorize(Roles = "SHIPPER,ADMIN")]
-    public async Task<ActionResult<ApiResponse<List<object>>>> AcceptShipOrders([FromBody] AcceptShipOrdersRequest request, CancellationToken cancellationToken)
-    {
-        var shipperId = GetCurrentUserId();
-        var result = await _ordersWorkflowService.AcceptShipOrdersAsync(request.ToDto(), shipperId, cancellationToken);
-        return Ok(new ApiResponse<List<object>> { Result = result });
-    }
-
-    [HttpGet("production/orders/my-orders-accepted")] //ship
-    [Authorize(Roles = "SHIPPER,ADMIN,OPERATION")]
-    public async Task<ActionResult<ApiResponse<object>>> GetMyAcceptedShipOrders(
-        [FromQuery] int page = 0,
-        [FromQuery] int size = 10,
-        [FromQuery] string sortBy = "createdAt",
-        [FromQuery] string sortDir = "desc",
-        CancellationToken cancellationToken = default)
-    {
-        var shipperId = GetCurrentUserId();
-        var result = await _ordersWorkflowService.GetMyAcceptedShipOrdersAsync(shipperId, page, size, sortBy, sortDir, cancellationToken);
-        return Ok(new ApiResponse<object> { Result = result });
-    }
-
-    [HttpPatch("production/orders/{orderId}/start-delivery")] //ship
-    [Authorize(Roles = "SHIPPER,ADMIN,OPERATION")]
+    [HttpPatch("management/orders/{orderId}/start-delivery")]
+    [Authorize(Roles = "OPERATION,ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> StartDelivery(string orderId, CancellationToken cancellationToken)
     {
-        var shipperId = GetCurrentUserId();
-        var result = await _ordersWorkflowService.StartDeliveryAsync(orderId, shipperId, cancellationToken);
+        var result = await _ordersWorkflowService.StartDeliveryAsync(orderId, cancellationToken);
         return Ok(new ApiResponse<object> { Result = result });
     }
 
-    [HttpPatch("production/orders/{orderId}/confirm-delivered")] //ship
-    [Authorize(Roles = "SHIPPER,ADMIN,OPERATION")]
+    [HttpPatch("management/orders/{orderId}/confirm-delivered")]
+    [Authorize(Roles = "OPERATION,ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> ConfirmDelivered(string orderId, CancellationToken cancellationToken)
     {
-        var shipperId = GetCurrentUserId();
-        var result = await _ordersWorkflowService.ConfirmDeliveredAsync(orderId, shipperId, cancellationToken);
+        var result = await _ordersWorkflowService.ConfirmDeliveredAsync(orderId, cancellationToken);
         return Ok(new ApiResponse<object> { Result = result });
     }
 
     [HttpGet("management/orders/cancelled/paid")]
-    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION,SHIPPER")]
+    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION")]
     public async Task<ActionResult<ApiResponse<object>>> GetCancelledPaidOrders(
         [FromQuery] int page = 0,
         [FromQuery] int size = 10,
@@ -221,7 +195,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpGet("management/orders/{orderId}")]
-    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION,SHIPPER")]
+    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION")]
     public async Task<ActionResult<ApiResponse<object>>> GetManagementOrderById(string orderId, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.GetManagementOrderByIdAsync(orderId, cancellationToken);
@@ -229,7 +203,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpGet("management/orders")]
-    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION,SHIPPER")]
+    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION")]
     public async Task<ActionResult<ApiResponse<object>>> GetManagementOrders(
         [FromQuery] string? status,
         [FromQuery] int page = 0,
@@ -243,7 +217,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpGet("management/orders/customer/{customerId}")]
-    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION,SHIPPER")]
+    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION")]
     public async Task<ActionResult<ApiResponse<object>>> GetManagementOrdersByCustomer(
         string customerId,
         [FromQuery] int page = 0,

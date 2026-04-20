@@ -10,7 +10,5 @@ public sealed class CreateOrderDto
 
     public List<CreateOrderItemDto> Items { get; set; } = new();
 
-    public string? ComboId { get; set; }
-
     public BankInfoDto? BankInfo { get; set; }
 }
