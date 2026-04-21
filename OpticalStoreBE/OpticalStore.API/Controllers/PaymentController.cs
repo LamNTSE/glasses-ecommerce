@@ -36,7 +36,8 @@ public sealed class PaymentController : ControllerBase
     [Authorize]
     public async Task<ActionResult<ApiResponse<string>>> Checkout([FromQuery] string orderId, CancellationToken cancellationToken)
     {
-        var paymentUrl = await _paymentWorkflowService.CheckoutAsync(orderId, cancellationToken);
+        var clientIpAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+        var paymentUrl = await _paymentWorkflowService.CheckoutAsync(orderId, clientIpAddress, cancellationToken);
         return Ok(new ApiResponse<string> { Result = paymentUrl });
     }
 
@@ -44,11 +45,24 @@ public sealed class PaymentController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> VnPayCallback(CancellationToken cancellationToken)
     {
-        var paymentId = Request.Query["vnp_TxnRef"].ToString();
-        var transactionStatus = Request.Query["vnp_TransactionStatus"].ToString();
+        var query = Request.Query.ToDictionary(x => x.Key, x => (string)x.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+        var result = await _paymentWorkflowService.HandleVnPayReturnAsync(query, cancellationToken);
 
-        var redirectPath = await _paymentWorkflowService.HandleVnPayCallbackAsync(paymentId, transactionStatus, cancellationToken);
-        return Redirect(redirectPath);
+        return Redirect(result.RedirectUrl);
+    }
+
+    [HttpGet("vnpay-ipn")]
+    [AllowAnonymous]
+    public async Task<IActionResult> VnPayIpn(CancellationToken cancellationToken)
+    {
+        var query = Request.Query.ToDictionary(x => x.Key, x => (string)x.Value.ToString(), StringComparer.OrdinalIgnoreCase);
+        var result = await _paymentWorkflowService.HandleVnPayIpnAsync(query, cancellationToken);
+
+        return Ok(new
+        {
+            RspCode = result.RspCode,
+            Message = result.Message
+        });
     }
 
     [HttpGet("orders/{orderId}/history")]

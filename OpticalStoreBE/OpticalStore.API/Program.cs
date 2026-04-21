@@ -33,6 +33,8 @@ if (string.IsNullOrWhiteSpace(defaultConnection))
 
 var jwtSection = builder.Configuration.GetSection("Jwt");
 var jwtOptions = jwtSection.Get<JwtOptions>() ?? new JwtOptions();
+var vnpaySection = builder.Configuration.GetSection(VnpayOptions.SectionName);
+var vnpayOptions = vnpaySection.Get<VnpayOptions>() ?? new VnpayOptions();
 
 if (string.IsNullOrWhiteSpace(jwtOptions.Key) || Encoding.UTF8.GetByteCount(jwtOptions.Key) < 32)
 {
@@ -42,6 +44,21 @@ if (string.IsNullOrWhiteSpace(jwtOptions.Key) || Encoding.UTF8.GetByteCount(jwtO
 if (string.IsNullOrWhiteSpace(jwtOptions.Issuer) || string.IsNullOrWhiteSpace(jwtOptions.Audience))
 {
 	throw new InvalidOperationException("CRITICAL ERROR: Jwt:Issuer and Jwt:Audience are required.");
+}
+
+if (string.IsNullOrWhiteSpace(vnpayOptions.TmnCode) || string.IsNullOrWhiteSpace(vnpayOptions.HashSecret) ||
+	string.IsNullOrWhiteSpace(vnpayOptions.Url) || string.IsNullOrWhiteSpace(vnpayOptions.ReturnUrl) ||
+	string.IsNullOrWhiteSpace(vnpayOptions.IpnUrl) || string.IsNullOrWhiteSpace(vnpayOptions.FrontendBaseUrl))
+{
+	throw new InvalidOperationException("CRITICAL ERROR: Vnpay configuration is missing. Check Vnpay:TmnCode, HashSecret, Url, ReturnUrl, IpnUrl and FrontendBaseUrl.");
+}
+
+if (!Uri.TryCreate(vnpayOptions.Url, UriKind.Absolute, out _) ||
+	!Uri.TryCreate(vnpayOptions.ReturnUrl, UriKind.Absolute, out _) ||
+	!Uri.TryCreate(vnpayOptions.IpnUrl, UriKind.Absolute, out _) ||
+	!Uri.TryCreate(vnpayOptions.FrontendBaseUrl, UriKind.Absolute, out _))
+{
+	throw new InvalidOperationException("CRITICAL ERROR: Vnpay URLs must be absolute URLs.");
 }
 
 builder.Services.AddControllers();

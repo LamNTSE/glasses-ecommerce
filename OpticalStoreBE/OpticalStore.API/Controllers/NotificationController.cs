@@ -44,6 +44,10 @@ public sealed class NotificationController : ControllerBase
                 await WriteEventAsync("notification", notification, cancellationToken);
             }
         }
+        catch (OperationCanceledException) when (HttpContext.RequestAborted.IsCancellationRequested)
+        {
+            // Client closed the SSE connection. This is expected and should not be logged as an error.
+        }
         finally
         {
             _notificationStreamService.Unsubscribe(userId, subscription.SubscriptionId);

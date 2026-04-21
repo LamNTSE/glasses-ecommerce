@@ -22,8 +22,20 @@ public sealed class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested)
+        {
+            if (!context.Response.HasStarted)
+            {
+                context.Response.StatusCode = StatusCodes.Status499ClientClosedRequest;
+            }
+        }
         catch (AppException ex)
         {
+            if (context.Response.HasStarted)
+            {
+                throw;
+            }
+
             context.Response.StatusCode = (int)ex.StatusCode;
             context.Response.ContentType = "application/json";
 
@@ -39,6 +51,11 @@ public sealed class ExceptionHandlingMiddleware
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unhandled exception.");
+
+            if (context.Response.HasStarted)
+            {
+                throw;
+            }
 
             context.Response.StatusCode = (int)HttpStatusCode.InternalServerError;
             context.Response.ContentType = "application/json";
