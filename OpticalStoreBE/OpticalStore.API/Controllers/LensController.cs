@@ -9,7 +9,6 @@ using OpticalStore.BLL.Services.Interfaces;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
-[ApiExplorerSettings(IgnoreApi = true)]
 [Route("lenses")]
 [Tags("07. Lenses")]
 public sealed class LensController : ControllerBase

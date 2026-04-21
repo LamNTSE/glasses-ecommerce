@@ -114,6 +114,11 @@ public sealed class AuthService : IAuthService
     {
         try
         {
+            if (string.IsNullOrWhiteSpace(request.Token))
+            {
+                return;
+            }
+
             var principal = await ValidateTokenAsync(request.Token, isRefreshFlow: false, cancellationToken);
             if (principal is null)
             {
@@ -127,15 +132,26 @@ public sealed class AuthService : IAuthService
         {
             // Keep behavior aligned with Spring service: expired token logout is treated as no-op.
         }
+        catch (AppException ex) when (ex.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            // Best-effort logout: invalid, missing, or already-invalidated tokens should not fail the request.
+        }
+        catch
+        {
+            // Best-effort logout: swallow unexpected persistence/token parsing errors so the API stays idempotent.
+        }
     }
 
     private string GenerateAccessToken(User user)
     {
         var utcNow = DateTime.UtcNow;
+        var scope = string.Join(' ', user.RoleNames.Select(role => $"ROLE_{role.Name.ToUpperInvariant()}"));
         var claims = new List<Claim>
         {
             new(JwtRegisteredClaimNames.Sub, user.Username ?? user.Id),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new(JwtRegisteredClaimNames.Iat, new DateTimeOffset(utcNow).ToUnixTimeSeconds().ToString(), ClaimValueTypes.Integer64),
+            new("scope", scope),
             new("userId", user.Id)
         };
 

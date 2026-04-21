@@ -75,6 +75,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             var lineTotal = (unitPrice + lensPrice) * item.Quantity;
             total += lineTotal;
 
+            var initialItemStatus = GetInitialOrderItemStatus(variant.OrderItemType, lens?.Id, prescriptionId);
+
             if (variant.Inventory is not null)
             {
                 variant.Inventory.Quantity = Math.Max(0, (variant.Inventory.Quantity ?? 0) - item.Quantity);
@@ -93,7 +95,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 LensName = lens?.Name,
                 OrderItemType = variant.OrderItemType,
                 TotalPrice = lineTotal,
-                Status = "PENDING",
+                Status = initialItemStatus,
                 PrescriptionId = prescriptionId,
                 DepositPrice = variant.OrderItemType == "PRE_ORDER" ? (unitPrice * 0.5m + lensPrice) * item.Quantity : lineTotal,
                 RemainingPrice = variant.OrderItemType == "PRE_ORDER" ? (unitPrice * 0.5m) * item.Quantity : 0m,
@@ -349,7 +351,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         var items = await _dbContext.OrderItems.Where(x => x.OrderId == orderId).ToListAsync(cancellationToken);
         foreach (var item in items)
         {
-            item.Status = "IN_PRODUCTION";
+            item.Status = GetInitialOrderItemStatus(item.OrderItemType, item.LensId, item.PrescriptionId);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -730,5 +732,15 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     private static bool CanCustomerCancel(string? status)
     {
         return status is "PENDING" or "PREPARING" or "AWAITING_VERIFICATION" or "ON_HOLD";
+    }
+
+    private static string GetInitialOrderItemStatus(string? orderItemType, string? lensId, string? prescriptionId)
+    {
+        var requiresProduction =
+            string.Equals(orderItemType, "PRE_ORDER", StringComparison.OrdinalIgnoreCase) ||
+            !string.IsNullOrWhiteSpace(lensId) ||
+            !string.IsNullOrWhiteSpace(prescriptionId);
+
+        return requiresProduction ? "IN_PRODUCTION" : "PRODUCED";
     }
 }

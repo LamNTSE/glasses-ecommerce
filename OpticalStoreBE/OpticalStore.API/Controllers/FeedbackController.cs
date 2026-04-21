@@ -14,7 +14,6 @@ using OpticalStore.BLL.Services.Interfaces;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
-[ApiExplorerSettings(IgnoreApi = true)]
 [Route("feedbacks")]
 [Tags("14. Feedbacks")]
 public sealed class FeedbackController : ControllerBase
