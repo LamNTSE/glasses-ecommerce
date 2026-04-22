@@ -122,7 +122,7 @@ public sealed class NotificationService : INotificationService
         {
             Id = notification.Id,
             RecipientId = notification.RecipientId,
-            RecipientName = notification.Recipient?.Username,
+            RecipientName = ResolveRecipientName(notification.Recipient),
             Title = notification.Title,
             Content = notification.Content,
             SenderId = notification.SenderId,
@@ -130,5 +130,29 @@ public sealed class NotificationService : INotificationService
             CreatedAt = notification.CreatedAt,
             ReadAt = notification.ReadAt
         };
+    }
+
+    private static string? ResolveRecipientName(User? recipient)
+    {
+        if (recipient is null)
+        {
+            return null;
+        }
+
+        var fullName = string.Join(" ", new[] { recipient.FirstName, recipient.LastName }
+            .Where(part => !string.IsNullOrWhiteSpace(part))
+            .Select(part => part!.Trim()));
+
+        if (!string.IsNullOrWhiteSpace(fullName))
+        {
+            return fullName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(recipient.Username))
+        {
+            return recipient.Username;
+        }
+
+        return recipient.Email;
     }
 }

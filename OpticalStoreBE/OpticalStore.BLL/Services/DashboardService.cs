@@ -11,11 +11,11 @@ public sealed class DashboardService : IDashboardService
     [
         "PENDING",
         "AWAITING_VERIFICATION",
-        "CONFIRMED",
         "PREPARING",
-        "PROCESSING",
-        "PRODUCED",
-        "SHIPPED"
+        "CONFIRMED",
+        "IN_PRODUCTION",
+        "READY_TO_SHIP",
+        "DELIVERING"
     ];
 
     private readonly OpticalStoreDbContext _dbContext;

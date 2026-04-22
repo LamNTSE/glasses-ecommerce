@@ -86,7 +86,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpPut("orders/{orderId}/cancel")]
-    [Authorize(Roles = "CUSTOMER,ADMIN,MANAGER")]
+    [Authorize(Roles = "CUSTOMER,ADMIN,MANAGER,SALE")]
     public async Task<ActionResult<ApiResponse<object>>> CancelOrder(string orderId, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.CancelOrderAsync(orderId, cancellationToken);

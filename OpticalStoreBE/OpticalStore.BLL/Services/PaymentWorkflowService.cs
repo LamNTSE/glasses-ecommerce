@@ -275,11 +275,17 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         if (string.Equals(payment.PaymentPurpose, PaymentPurposeRemaining, StringComparison.OrdinalIgnoreCase))
         {
             payment.Order.PreOrderStatus = "REMAINING_PAID";
-            payment.Order.Status = "PREPARING";
+            // For successful VNPAY payments, mark order as PENDING so it enters the normal verification queue
+            payment.Order.Status = string.Equals(payment.PaymentMethod, PaymentMethodVnPay, StringComparison.OrdinalIgnoreCase)
+                ? "PENDING"
+                : "PREPARING";
             return;
         }
 
-        payment.Order.Status = "PREPARING";
+        // For full payments (or other purposes) if paid via VNPAY, set to PENDING instead of PREPARING
+        payment.Order.Status = string.Equals(payment.PaymentMethod, PaymentMethodVnPay, StringComparison.OrdinalIgnoreCase)
+            ? "PENDING"
+            : "PREPARING";
     }
 
     private string BuildPaymentUrl(Payment payment, string? clientIpAddress)
