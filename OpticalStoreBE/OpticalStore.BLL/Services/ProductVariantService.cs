@@ -46,14 +46,22 @@ public sealed class ProductVariantService : IProductVariantService
                 Status = request.Status,
                 OrderItemType = request.OrderItemType,
                 IsDeleted = false,
-                Quantity = request.Quantity
+                // Quantity removed from ProductVariant; inventory.Quantity will be used
             };
             _dbContext.ProductVariants.Add(variant);
         }
         else
         {
-            variant.Quantity = (variant.Quantity ?? 0) + (request.Quantity ?? 0);
-            variant.OrderItemType = (variant.Quantity ?? 0) > 0 ? "IN_STOCK" : "PRE_ORDER";
+            // do not maintain Quantity on ProductVariant; inventory holds stock
+            if (variant.Inventory is not null)
+            {
+                var avail = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
+                variant.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
+            }
+            else
+            {
+                variant.OrderItemType = (request.Quantity ?? 0) > 0 ? "IN_STOCK" : "PRE_ORDER";
+            }
         }
 
         if (variant.Inventory is null)
@@ -61,14 +69,16 @@ public sealed class ProductVariantService : IProductVariantService
             variant.Inventory = new Inventory
             {
                 Id = Guid.NewGuid().ToString(),
-                Quantity = request.Quantity ?? variant.Quantity,
+                Quantity = request.Quantity ?? 0,
                 ReservedQuantity = 0,
                 ProductVariantId = variant.Id
             };
+            var avail = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
+            variant.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
         }
         else if (request.Quantity.HasValue)
         {
-            variant.Inventory.Quantity = variant.Quantity;
+            variant.Inventory.Quantity = request.Quantity;
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -109,11 +119,13 @@ public sealed class ProductVariantService : IProductVariantService
         variant.Price = request.Price;
         variant.Status = request.Status;
         variant.OrderItemType = request.OrderItemType;
-        variant.Quantity = request.Quantity;
 
-        if (variant.Inventory is not null)
+        // update inventory quantity if provided
+        if (variant.Inventory is not null && request.Quantity.HasValue)
         {
             variant.Inventory.Quantity = request.Quantity;
+            var avail = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
+            variant.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -158,8 +170,8 @@ public sealed class ProductVariantService : IProductVariantService
             variant.Inventory.Quantity = request.ChangeAmount;
         }
 
-        variant.Quantity = request.ChangeAmount;
-        variant.OrderItemType = request.ChangeAmount > 0 ? "IN_STOCK" : "PRE_ORDER";
+        var availAfter = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
+        variant.OrderItemType = availAfter > 0 ? "IN_STOCK" : "PRE_ORDER";
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -240,7 +252,7 @@ public sealed class ProductVariantService : IProductVariantService
             TempleLengthMm = variant.TempleLengthMm,
             SizeLabel = variant.SizeLabel,
             Price = variant.Price,
-            Quantity = variant.Inventory?.Quantity ?? variant.Quantity,
+            Quantity = variant.Inventory?.Quantity,
             Status = variant.Status,
             OrderItemType = variant.OrderItemType
         };

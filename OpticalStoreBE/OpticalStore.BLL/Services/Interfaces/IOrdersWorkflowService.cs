@@ -31,6 +31,8 @@ public interface IOrdersWorkflowService
 
     Task<object> FinishProductionAsync(string orderId, CancellationToken cancellationToken = default);
 
+    Task<object> BulkReadyToShipAsync(IReadOnlyCollection<string> orderIds, CancellationToken cancellationToken = default);
+
     Task<object> UpdateItemStatusAsync(string orderItemId, string status, CancellationToken cancellationToken = default);
 
     Task<object> StartDeliveryAsync(string orderId, CancellationToken cancellationToken = default);

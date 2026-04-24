@@ -49,6 +49,7 @@ public static class RequestToDtoMappings
             Username = request.Username,
             Password = request.Password,
             Email = request.Email,
+            Phone = request.Phone,
             FirstName = request.FirstName,
             LastName = request.LastName,
             Dob = request.Dob

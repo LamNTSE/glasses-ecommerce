@@ -82,8 +82,14 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
             if (variant.Inventory is not null)
             {
-                variant.Inventory.Quantity = Math.Max(0, (variant.Inventory.Quantity ?? 0) - item.Quantity);
+                var available = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
+                if (available < item.Quantity)
+                {
+                    throw new AppException("INSUFFICIENT_STOCK", "Not enough inventory available.", HttpStatusCode.BadRequest);
+                }
                 variant.Inventory.ReservedQuantity = (variant.Inventory.ReservedQuantity ?? 0) + item.Quantity;
+                var avail = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
+                variant.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
             }
 
             orderItems.Add(new OrderItem
@@ -222,8 +228,25 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 if (inventory is not null)
                 {
                     var diff = newQty - oldQty;
-                    inventory.Quantity = (inventory.Quantity ?? 0) - diff;
-                    inventory.ReservedQuantity = (inventory.ReservedQuantity ?? 0) + diff;
+                    // when increasing quantity, ensure enough available stock to reserve
+                    if (diff > 0)
+                    {
+                        if (((inventory.ReservedQuantity ?? 0) + diff) > (inventory.Quantity ?? 0))
+                        {
+                            throw new AppException("INSUFFICIENT_STOCK", "Not enough inventory available to increase quantity.", HttpStatusCode.BadRequest);
+                        }
+                        inventory.ReservedQuantity = (inventory.ReservedQuantity ?? 0) + diff;
+                    }
+                    else if (diff < 0)
+                    {
+                        inventory.ReservedQuantity = Math.Max(0, (inventory.ReservedQuantity ?? 0) + diff);
+                    }
+                    var variantToUpdate = await _dbContext.ProductVariants.FirstOrDefaultAsync(x => x.Id == item.ProductVariantId, cancellationToken);
+                    if (variantToUpdate is not null)
+                    {
+                        var avail = (inventory.Quantity ?? 0) - (inventory.ReservedQuantity ?? 0);
+                        variantToUpdate.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
+                    }
                 }
             }
 
@@ -268,7 +291,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             }
 
             inventory.ReservedQuantity = Math.Max(0, (inventory.ReservedQuantity ?? 0) - (item.Quantity ?? 0));
-            inventory.Quantity = (inventory.Quantity ?? 0) + (item.Quantity ?? 0);
+            var variantToUpdate = await _dbContext.ProductVariants.FirstOrDefaultAsync(x => x.Id == item.ProductVariantId, cancellationToken);
+            if (variantToUpdate is not null)
+            {
+                var avail = (inventory.Quantity ?? 0) - (inventory.ReservedQuantity ?? 0);
+                variantToUpdate.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
+            }
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
@@ -418,6 +446,42 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             cancellationToken);
 
         return await BuildOrderResponse(orderId, cancellationToken);
+    }
+
+    public async Task<object> BulkReadyToShipAsync(IReadOnlyCollection<string> orderIds, CancellationToken cancellationToken = default)
+    {
+        var uniqueOrderIds = orderIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+        if (uniqueOrderIds.Count == 0)
+        {
+            return new { updatedCount = 0 };
+        }
+
+        var orders = await _dbContext.Orders
+            .Where(x => uniqueOrderIds.Contains(x.Id))
+            .ToListAsync(cancellationToken);
+
+        if (orders.Count != uniqueOrderIds.Count)
+        {
+            throw new AppException("ORDER_NOT_FOUND", "One or more orders were not found.", HttpStatusCode.NotFound);
+        }
+
+        foreach (var order in orders)
+        {
+            if (order.Status != "PRODUCED")
+            {
+                throw new AppException("INVALID_ORDER_STATUS", "Order cannot be marked ready to ship in current status.", HttpStatusCode.BadRequest);
+            }
+
+            order.Status = "READY_TO_SHIP";
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        return new
+        {
+            updatedCount = orders.Count,
+            orderIds = orders.Select(x => x.Id).ToList()
+        };
     }
 
     public async Task<object> UpdateItemStatusAsync(string orderItemId, string status, CancellationToken cancellationToken = default)
@@ -717,6 +781,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             deliveryAddress = order.DeliveryAddress,
             recipientName = order.RecipientName,
             phoneNumber = order.PhoneNumber,
+            paymentMethod = order.PaymentMethod,
             orderStatus = order.Status,
             totalAmount = order.TotalAmount,
             depositAmount = order.DepositAmount,

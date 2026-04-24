@@ -42,6 +42,7 @@ public sealed class UserService : IUserService
             Username = request.Username,
             Password = BCrypt.Net.BCrypt.HashPassword(request.Password),
             Email = request.Email,
+            Phone = request.Phone,
             FirstName = request.FirstName,
             LastName = request.LastName,
             Dob = request.Dob,
