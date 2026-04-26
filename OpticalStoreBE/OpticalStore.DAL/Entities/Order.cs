@@ -25,6 +25,10 @@ public partial class Order
 
     public string? PreOrderStatus { get; set; }
 
+    public bool RequiresProduction { get; set; } = false;
+
+    public string OrderType { get; set; } = "NORMAL";
+
     public decimal? RemainingAmount { get; set; }
 
     public decimal? ComboDiscountAmount { get; set; }

@@ -15,8 +15,6 @@ public interface IOrdersWorkflowService
 
     Task<object> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default);
 
-    Task<object> CompleteOrderAsync(string orderId, CancellationToken cancellationToken = default);
-
     Task<object> UploadPrescriptionImageAsync(string orderItemId, string fileName, CancellationToken cancellationToken = default);
 
     Task<object> UpdatePrescriptionAsync(string orderItemId, PrescriptionDto request, CancellationToken cancellationToken = default);
@@ -30,6 +28,12 @@ public interface IOrdersWorkflowService
     Task<object> StartProductionAsync(string orderId, CancellationToken cancellationToken = default);
 
     Task<object> FinishProductionAsync(string orderId, CancellationToken cancellationToken = default);
+
+    Task<object> MarkReadyToShipAsync(string orderId, CancellationToken cancellationToken = default);
+
+    Task<object> MarkWaitingStockAsync(string orderId, CancellationToken cancellationToken = default);
+
+    Task<object> ReceiveStockAsync(string orderId, CancellationToken cancellationToken = default);
 
     Task<object> BulkReadyToShipAsync(IReadOnlyCollection<string> orderIds, CancellationToken cancellationToken = default);
 
@@ -50,4 +54,8 @@ public interface IOrdersWorkflowService
     Task DeleteOrderLogicallyAsync(string orderId, CancellationToken cancellationToken = default);
 
     Task<object> PriceCheckAsync(PriceCheckDto request, CancellationToken cancellationToken = default);
+
+    object GetCancelPermission(Order order);
+
+    object GetAllowedActions(Order order, string? userRole);
 }

@@ -335,7 +335,7 @@ public partial class OpticalStoreDbContext : DbContext
             entity.Property(e => e.ProductVariantId)
                 .HasMaxLength(255)
                 .HasColumnName("product_variant_id");
-            // quantity column removed from product_variant; use Inventory table instead
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
             entity.Property(e => e.ReservedQuantity).HasColumnName("reserved_quantity");
 
             entity.HasOne(d => d.ProductVariant).WithOne(p => p.Inventory)
@@ -513,7 +513,7 @@ public partial class OpticalStoreDbContext : DbContext
             entity.Property(e => e.ProductVariantId)
                 .HasMaxLength(255)
                 .HasColumnName("product_variant_id");
-            // quantity column removed from product_variant; use Inventory table instead
+            entity.Property(e => e.Quantity).HasColumnName("quantity");
             entity.Property(e => e.RemainingPrice)
                 .HasPrecision(38, 2)
                 .HasColumnName("remaining_price");

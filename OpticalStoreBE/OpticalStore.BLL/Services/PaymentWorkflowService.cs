@@ -19,8 +19,6 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
     private const string PaymentStatusUnpaid = "UNPAID";
     private const string PaymentStatusPaid = "PAID";
     private const string PaymentStatusFailed = "FAILED";
-    private const string PaymentPurposeDeposit = "DEPOSIT";
-    private const string PaymentPurposeRemaining = "REMAINING";
     private const string PaymentPurposeFull = "FULL";
 
     private readonly OpticalStoreDbContext _dbContext;
@@ -58,7 +56,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             var lensPriceTotal = lensPrice * item.Quantity;
             var itemTotal = baseItemTotal + lensPriceTotal;
 
-            var paymentPercentage = string.Equals(variant?.OrderItemType, "PRE_ORDER", StringComparison.OrdinalIgnoreCase) ? 0.5m : 1m;
+            var paymentPercentage = 1m;
             var requiredPayment = baseItemTotal * paymentPercentage + lensPriceTotal;
 
             orderTotal += itemTotal;
@@ -83,16 +81,14 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
 
         return new PaymentRequirementResultDto
         {
-            DepositPercentage = 0.5m,
+            DepositPercentage = 1m,
             RequiredAmount = requiredPaymentTotal,
             OrderTotal = orderTotal,
             RequiredPaymentTotal = requiredPaymentTotal,
             RemainingPaymentTotal = remaining,
             ItemRequirements = itemRequirements,
             AllowCod = requiredPaymentTotal == 0,
-            Message = requiredPaymentTotal == orderTotal
-                ? "Full payment is required for in-stock items."
-                : "Deposit is required for pre-order items."
+            Message = "Full payment is required."
         };
     }
 
@@ -107,17 +103,8 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             throw new AppException("ORDER_NOT_FOUND", "Order not found.", HttpStatusCode.NotFound);
         }
 
-        var hasPaidDeposit = order.Payments.Any(x => string.Equals(x.PaymentPurpose, PaymentPurposeDeposit, StringComparison.OrdinalIgnoreCase) && string.Equals(x.Status, PaymentStatusPaid, StringComparison.OrdinalIgnoreCase));
-        var purpose = (order.RemainingAmount ?? 0m) <= 0m
-            ? PaymentPurposeFull
-            : hasPaidDeposit ? PaymentPurposeRemaining : PaymentPurposeDeposit;
-
-        var amount = purpose switch
-        {
-            PaymentPurposeFull => order.TotalAmount ?? 0m,
-            PaymentPurposeDeposit => order.DepositAmount ?? 0m,
-            _ => order.RemainingAmount ?? 0m
-        };
+        var purpose = PaymentPurposeFull;
+        var amount = order.TotalAmount ?? 0m;
 
         if (amount <= 0m)
         {
@@ -265,24 +252,14 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             return;
         }
 
-        if (string.Equals(payment.PaymentPurpose, PaymentPurposeDeposit, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(payment.Order.PreOrderStatus, "PREORDER_PENDING", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(payment.Order.Status, "PREORDER_PENDING", StringComparison.OrdinalIgnoreCase))
         {
-            payment.Order.PreOrderStatus = "DEPOSIT_PAID";
-            payment.Order.Status = "AWAITING_VERIFICATION";
+            payment.Order.Status = "PREORDER_PENDING";
+            payment.Order.PreOrderStatus = "PREORDER_PENDING";
             return;
         }
 
-        if (string.Equals(payment.PaymentPurpose, PaymentPurposeRemaining, StringComparison.OrdinalIgnoreCase))
-        {
-            payment.Order.PreOrderStatus = "REMAINING_PAID";
-            // For successful VNPAY payments, mark order as PENDING so it enters the normal verification queue
-            payment.Order.Status = string.Equals(payment.PaymentMethod, PaymentMethodVnPay, StringComparison.OrdinalIgnoreCase)
-                ? "PENDING"
-                : "PREPARING";
-            return;
-        }
-
-        // For full payments (or other purposes) if paid via VNPAY, set to PENDING instead of PREPARING
         payment.Order.Status = string.Equals(payment.PaymentMethod, PaymentMethodVnPay, StringComparison.OrdinalIgnoreCase)
             ? "PENDING"
             : "PREPARING";

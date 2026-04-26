@@ -105,19 +105,25 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 TotalPrice = lineTotal,
                 Status = initialItemStatus,
                 PrescriptionId = prescriptionId,
-                DepositPrice = variant.OrderItemType == "PRE_ORDER" ? (unitPrice * 0.5m + lensPrice) * item.Quantity : lineTotal,
-                RemainingPrice = variant.OrderItemType == "PRE_ORDER" ? (unitPrice * 0.5m) * item.Quantity : 0m,
+                DepositPrice = lineTotal,
+                RemainingPrice = 0m,
                 InventoryId = variant.Inventory?.Id
             });
         }
 
         var finalTotal = Math.Max(0m, total);
-        var deposit = orderItems.Sum(x => x.DepositPrice ?? 0m);
+        var hasPreOrderItem = orderItems.Any(x => x.OrderItemType == "PRE_ORDER");
+        var deposit = finalTotal;
+
+        order.RequiresProduction = orderItems.Any(x => !string.IsNullOrWhiteSpace(x.LensId) || !string.IsNullOrWhiteSpace(x.PrescriptionId));
+        order.OrderType = hasPreOrderItem ? "PREORDER" : "NORMAL";
+
+        order.Status = "PENDING";
 
         order.TotalAmount = finalTotal;
         order.DepositAmount = deposit;
-        order.RemainingAmount = Math.Max(0m, finalTotal - deposit);
-        order.PreOrderStatus = orderItems.Any(x => x.OrderItemType == "PRE_ORDER") ? "DEPOSIT_PENDING" : null;
+        order.RemainingAmount = 0m;
+        order.PreOrderStatus = hasPreOrderItem ? "PREORDER_PENDING" : null;
 
         _dbContext.Orders.Add(order);
         _dbContext.OrderItems.AddRange(orderItems);
@@ -209,6 +215,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         order.RecipientName = request.RecipientName ?? order.RecipientName;
         order.PhoneNumber = request.PhoneNumber ?? order.PhoneNumber;
 
+        // Recalculate RequiresProduction before CONFIRMED, lock after CONFIRMED
+        if (order.Status is "PENDING")
+        {
+            order.RequiresProduction = order.OrderItems.Any(x => !string.IsNullOrWhiteSpace(x.LensId) || !string.IsNullOrWhiteSpace(x.PrescriptionId));
+        }
+
         foreach (var update in request.Items)
         {
             var item = order.OrderItems.FirstOrDefault(x => x.Id == update.OrderItemId);
@@ -264,17 +276,19 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
     public async Task<object> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default)
     {
-        var order = await _dbContext.Orders.Include(x => x.OrderItems).FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
+        var order = await _dbContext.Orders.Include(x => x.OrderItems).Include(x => x.Payments).FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
         if (order is null)
         {
             throw new AppException("ORDER_NOT_FOUND", "Order not found.", HttpStatusCode.NotFound);
         }
 
-        if (!CanCustomerCancel(order.Status))
+        var cancelPermission = GetCancelPermission(order);
+        if (!cancelPermission.canAutoCancel)
         {
-            throw new AppException("INVALID_ORDER_STATUS", "Order cannot be cancelled in current status.", HttpStatusCode.BadRequest);
+            throw new AppException("INVALID_ORDER_STATUS", "Order cannot be auto-cancelled in current state. Use request cancel instead.", HttpStatusCode.BadRequest);
         }
 
+        var oldStatus = order.Status;
         order.Status = "CANCELLED";
 
         foreach (var item in order.OrderItems)
@@ -300,27 +314,113 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await LogStatusTransitionAsync(order, oldStatus, "CANCELLED", order.CustomerId, "CUSTOMER", "API", null, "Customer cancelled order", cancellationToken);
+
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
-    public async Task<object> CompleteOrderAsync(string orderId, CancellationToken cancellationToken = default)
+    public object GetCancelPermission(Order order)
     {
-        var order = await _dbContext.Orders.FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
-        if (order is null)
+        var isPaid = order.Payments.Any(p => p.Status == "PAID");
+        var productionStarted = order.Status == "IN_PRODUCTION";
+
+        var canAutoCancel = !isPaid && !productionStarted && order.Status is "PENDING" or "CONFIRMED";
+        var canRequestCancel = order.Status is "PENDING" or "CONFIRMED";
+
+        return new
         {
-            throw new AppException("ORDER_NOT_FOUND", "Order not found.", HttpStatusCode.NotFound);
-        }
-
-        if (order.Status != "DELIVERED")
-        {
-            throw new AppException("INVALID_ORDER_STATUS", "Order cannot be completed in current status.", HttpStatusCode.BadRequest);
-        }
-
-        order.Status = "COMPLETED";
-        await _dbContext.SaveChangesAsync(cancellationToken);
-
-        return await BuildOrderResponse(orderId, cancellationToken);
+            canAutoCancel,
+            canRequestCancel
+        };
     }
+
+    public object GetAllowedActions(Order order, string? userRole)
+    {
+        var actions = new List<string>();
+
+        // Edit action
+        if (CanCustomerEdit(order.Status) && userRole == "CUSTOMER")
+        {
+            actions.Add("EDIT");
+        }
+
+        // Cancel actions
+        var cancelPerm = GetCancelPermission(order);
+        if (userRole == "CUSTOMER")
+        {
+            if (cancelPerm.canAutoCancel)
+            {
+                actions.Add("AUTO_CANCEL");
+            }
+            if (cancelPerm.canRequestCancel)
+            {
+                actions.Add("REQUEST_CANCEL");
+            }
+        }
+        else if (userRole is "ADMIN" or "MANAGER" or "SALE")
+        {
+            actions.Add("CANCEL");
+        }
+
+        // Production actions (staff only)
+        if (userRole is "OPERATION" or "ADMIN")
+        {
+            if (order.Status == "CONFIRMED")
+            {
+                if (order.RequiresProduction)
+                {
+                    actions.Add("START_PRODUCTION");
+                }
+                else
+                {
+                    actions.Add("MARK_READY_TO_SHIP");
+                    actions.Add("MARK_WAITING_STOCK");
+                }
+            }
+
+            if (order.Status == "IN_PRODUCTION")
+            {
+                actions.Add("FINISH_PRODUCTION");
+            }
+
+            if (order.Status == "WAITING_STOCK")
+            {
+                actions.Add("RECEIVE_STOCK");
+            }
+
+            if (order.Status == "READY_TO_SHIP")
+            {
+                actions.Add("START_DELIVERY");
+            }
+        }
+
+        // Delivery actions (shipper/operation/admin)
+        if (userRole is "SHIPPER" or "OPERATION" or "ADMIN")
+        {
+            if (order.Status == "DELIVERING")
+            {
+                actions.Add("CONFIRM_DELIVERED");
+            }
+        }
+
+        // Verification actions (sale/admin/manager)
+        if (userRole is "SALE" or "ADMIN" or "MANAGER")
+        {
+            if (order.Status == "PENDING")
+            {
+                actions.Add("VERIFY");
+                actions.Add("REJECT");
+            }
+        }
+
+        return new
+        {
+            allowedActions = actions
+        };
+    }
+
+    // CompleteOrderAsync removed - DELIVERED is now the final state
 
     public async Task<object> UploadPrescriptionImageAsync(string orderItemId, string fileName, CancellationToken cancellationToken = default)
     {
@@ -363,12 +463,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             throw new AppException("WORKFLOW_NOT_SUPPORTED", "Reject verification is not supported in current lifecycle.", HttpStatusCode.BadRequest);
         }
 
-        if (order.Status is not ("PENDING" or "AWAITING_VERIFICATION"))
+        if (order.Status is not ("PENDING" or "AWAITING_VERIFICATION" or "PREORDER_PENDING"))
         {
             throw new AppException("INVALID_ORDER_STATUS", "Order cannot be verified in current status.", HttpStatusCode.BadRequest);
         }
 
-        order.Status = "CONFIRMED";
+        order.Status = order.Status == "PREORDER_PENDING" ? "PREORDER_CONFIRMED" : "CONFIRMED";
         await _dbContext.SaveChangesAsync(cancellationToken);
 
         await TryNotifyOrderCustomerAsync(order,
@@ -403,6 +503,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             throw new AppException("INVALID_ORDER_STATUS", "Order cannot start production in current status.", HttpStatusCode.BadRequest);
         }
 
+        if (!order.RequiresProduction)
+        {
+            throw new AppException("INVALID_ORDER_STATUS", "Order does not require production.", HttpStatusCode.BadRequest);
+        }
+
+        var oldStatus = order.Status;
         order.Status = "IN_PRODUCTION";
 
         var items = await _dbContext.OrderItems.Where(x => x.OrderId == orderId).ToListAsync(cancellationToken);
@@ -412,6 +518,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await LogStatusTransitionAsync(order, oldStatus, "IN_PRODUCTION", null, "STAFF_OPERATION", "API", null, "Start production", cancellationToken);
 
         await TryNotifyOrderCustomerAsync(order,
             "Đơn hàng đang sản xuất",
@@ -430,15 +538,22 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             throw new AppException("INVALID_ORDER_STATUS", "Order cannot finish production in current status.", HttpStatusCode.BadRequest);
         }
 
+        var oldStatus = order.Status;
         order.Status = "READY_TO_SHIP";
 
         var items = await _dbContext.OrderItems.Where(x => x.OrderId == orderId).ToListAsync(cancellationToken);
         foreach (var item in items)
         {
-            item.Status = "PRODUCED";
+            // Only set PRODUCED for items that actually required production
+            if (!string.IsNullOrWhiteSpace(item.LensId) || !string.IsNullOrWhiteSpace(item.PrescriptionId))
+            {
+                item.Status = "PRODUCED";
+            }
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await LogStatusTransitionAsync(order, oldStatus, "READY_TO_SHIP", null, "STAFF_OPERATION", "API", null, "Finish production", cancellationToken);
 
         await TryNotifyOrderCustomerAsync(order,
             "Đơn hàng đã hoàn tất sản xuất",
@@ -448,40 +563,92 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
-    public async Task<object> BulkReadyToShipAsync(IReadOnlyCollection<string> orderIds, CancellationToken cancellationToken = default)
+    public async Task<object> MarkReadyToShipAsync(string orderId, CancellationToken cancellationToken = default)
     {
-        var uniqueOrderIds = orderIds.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
-        if (uniqueOrderIds.Count == 0)
+        var order = await GetOrder(orderId, cancellationToken);
+
+        if (order.Status != "CONFIRMED")
         {
-            return new { updatedCount = 0 };
+            throw new AppException("INVALID_ORDER_STATUS", "Order cannot be marked ready to ship in current status.", HttpStatusCode.BadRequest);
         }
 
-        var orders = await _dbContext.Orders
-            .Where(x => uniqueOrderIds.Contains(x.Id))
-            .ToListAsync(cancellationToken);
-
-        if (orders.Count != uniqueOrderIds.Count)
+        if (order.RequiresProduction)
         {
-            throw new AppException("ORDER_NOT_FOUND", "One or more orders were not found.", HttpStatusCode.NotFound);
+            throw new AppException("INVALID_ORDER_STATUS", "Order requires production. Use StartProductionAsync instead.", HttpStatusCode.BadRequest);
         }
 
-        foreach (var order in orders)
-        {
-            if (order.Status != "PRODUCED")
-            {
-                throw new AppException("INVALID_ORDER_STATUS", "Order cannot be marked ready to ship in current status.", HttpStatusCode.BadRequest);
-            }
+        var oldStatus = order.Status;
+        order.Status = "READY_TO_SHIP";
 
-            order.Status = "READY_TO_SHIP";
-        }
+        // Do NOT set item statuses to PRODUCED for frame-only orders (semantically wrong)
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
-        return new
+        await LogStatusTransitionAsync(order, oldStatus, "READY_TO_SHIP", null, "STAFF_OPERATION", "API", null, "Mark ready to ship", cancellationToken);
+
+        await TryNotifyOrderCustomerAsync(order,
+            "Đơn hàng đã sẵn sàng giao",
+            $"Đơn hàng {order.Id} đã sẵn sàng giao.",
+            cancellationToken);
+
+        return await BuildOrderResponse(orderId, cancellationToken);
+    }
+
+    public async Task<object> MarkWaitingStockAsync(string orderId, CancellationToken cancellationToken = default)
+    {
+        var order = await GetOrder(orderId, cancellationToken);
+
+        if (order.Status != "CONFIRMED")
         {
-            updatedCount = orders.Count,
-            orderIds = orders.Select(x => x.Id).ToList()
-        };
+            throw new AppException("INVALID_ORDER_STATUS", "Order cannot be marked waiting for stock in current status.", HttpStatusCode.BadRequest);
+        }
+
+        var oldStatus = order.Status;
+        order.Status = "WAITING_STOCK";
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await LogStatusTransitionAsync(order, oldStatus, "WAITING_STOCK", null, "STAFF_OPERATION", "API", null, "Mark waiting for stock", cancellationToken);
+
+        await TryNotifyOrderCustomerAsync(order,
+            "Đơn hàng đang chờ nhập hàng",
+            $"Đơn hàng {order.Id} đang chờ nhập hàng.",
+            cancellationToken);
+
+        return await BuildOrderResponse(orderId, cancellationToken);
+    }
+
+    public async Task<object> ReceiveStockAsync(string orderId, CancellationToken cancellationToken = default)
+    {
+        var order = await GetOrder(orderId, cancellationToken);
+
+        if (order.Status != "WAITING_STOCK")
+        {
+            throw new AppException("INVALID_ORDER_STATUS", "Order is not in waiting stock status.", HttpStatusCode.BadRequest);
+        }
+
+        var oldStatus = order.Status;
+        order.Status = "READY_TO_SHIP";
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await LogStatusTransitionAsync(order, oldStatus, "READY_TO_SHIP", null, "STAFF_OPERATION", "API", null, "Stock received", cancellationToken);
+
+        await TryNotifyOrderCustomerAsync(order,
+            "Đơn hàng đã sẵn sàng giao",
+            $"Đơn hàng {order.Id} đã sẵn sàng giao.",
+            cancellationToken);
+
+        return await BuildOrderResponse(orderId, cancellationToken);
+    }
+
+    public Task<object> BulkReadyToShipAsync(IReadOnlyCollection<string> orderIds, CancellationToken cancellationToken = default)
+    {
+        // Disabled for safety - bulk operations are dangerous and hard to rollback/audit
+        // Use MarkReadyToShipAsync for individual orders instead
+        _ = orderIds;
+        _ = cancellationToken;
+        return Task.FromException<object>(new AppException("WORKFLOW_NOT_SUPPORTED", "Bulk operations are disabled for safety. Use individual order actions instead.", HttpStatusCode.BadRequest));
     }
 
     public async Task<object> UpdateItemStatusAsync(string orderItemId, string status, CancellationToken cancellationToken = default)
@@ -777,7 +944,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         {
             customerId = order.CustomerId,
             orderId = order.Id,
-            orderName = $"ORDER-{order.Id[..Math.Min(8, order.Id.Length)]}",
+            orderName = $"{(order.OrderItems.Any(i => string.Equals(i.OrderItemType, "PRE_ORDER", StringComparison.OrdinalIgnoreCase)) ? "PREORDER" : "ORDER")}-{order.Id[..Math.Min(8, order.Id.Length)]}",
             deliveryAddress = order.DeliveryAddress,
             recipientName = order.RecipientName,
             phoneNumber = order.PhoneNumber,
@@ -787,6 +954,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             depositAmount = order.DepositAmount,
             remainingAmount = order.RemainingAmount,
             paidAmount = order.Payments.Where(x => x.Status == "PAID").Sum(x => x.Amount ?? 0m),
+            requiresProduction = order.RequiresProduction,
+            orderType = order.OrderType,
             items = itemResults,
             payments,
             bankInfo = new
@@ -863,12 +1032,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
     private static bool CanCustomerEdit(string? status)
     {
-        return status is "PENDING" or "PREPARING";
+        return status is "PENDING";
     }
 
     private static bool CanCustomerCancel(string? status)
     {
-        return status is "PENDING" or "PREPARING" or "CONFIRMED";
+        return status is "PENDING" or "CONFIRMED";
     }
 
     private static string GetInitialOrderItemStatus(string? orderItemType, string? lensId, string? prescriptionId)
@@ -906,5 +1075,25 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         }
 
         await TryCreateOrderNotificationAsync(order.CustomerId, title, content, cancellationToken);
+    }
+
+    private async Task LogStatusTransitionAsync(Order order, string? oldStatus, string newStatus, string? userId, string? role, string source, string? ip = null, string? reason = null, CancellationToken cancellationToken = default)
+    {
+        var history = new OrderStatusHistory
+        {
+            Id = Guid.NewGuid().ToString(),
+            OrderId = order.Id,
+            OldStatus = oldStatus,
+            NewStatus = newStatus,
+            ChangedAt = DateTime.UtcNow,
+            ChangedByUserId = userId,
+            ChangedByRole = role,
+            Source = source,
+            Ip = ip,
+            Reason = reason
+        };
+
+        _dbContext.OrderStatusHistories.Add(history);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }

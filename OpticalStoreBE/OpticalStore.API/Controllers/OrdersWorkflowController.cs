@@ -93,11 +93,18 @@ public sealed class OrdersWorkflowController : ControllerBase
         return Ok(new ApiResponse<object> { Result = result });
     }
 
-    [HttpPut("orders/{orderId}/complete")]
-    [Authorize(Roles = "CUSTOMER,ADMIN,MANAGER,SHIPPER")]
-    public async Task<ActionResult<ApiResponse<object>>> CompleteOrder(string orderId, CancellationToken cancellationToken)
+    [HttpGet("orders/{orderId}/allowed-actions")]
+    [Authorize]
+    public ActionResult<ApiResponse<object>> GetAllowedActions(string orderId)
     {
-        var result = await _ordersWorkflowService.CompleteOrderAsync(orderId, cancellationToken);
+        var order = _dbContext.Orders.FirstOrDefault(x => x.Id == orderId);
+        if (order is null)
+        {
+            return NotFound(new ApiResponse<object> { Error = "Order not found" });
+        }
+
+        var userRole = User.FindFirst(ClaimTypes.Role)?.Value;
+        var result = _ordersWorkflowService.GetAllowedActions(order, userRole);
         return Ok(new ApiResponse<object> { Result = result });
     }
 
@@ -154,6 +161,30 @@ public sealed class OrdersWorkflowController : ControllerBase
     public async Task<ActionResult<ApiResponse<object>>> FinishProduction(string orderId, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.FinishProductionAsync(orderId, cancellationToken);
+        return Ok(new ApiResponse<object> { Result = result });
+    }
+
+    [HttpPut("production/orders/{orderId}/mark-ready-to-ship")]
+    [Authorize(Roles = "OPERATION,ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> MarkReadyToShip(string orderId, CancellationToken cancellationToken)
+    {
+        var result = await _ordersWorkflowService.MarkReadyToShipAsync(orderId, cancellationToken);
+        return Ok(new ApiResponse<object> { Result = result });
+    }
+
+    [HttpPut("production/orders/{orderId}/mark-waiting-stock")]
+    [Authorize(Roles = "OPERATION,ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> MarkWaitingStock(string orderId, CancellationToken cancellationToken)
+    {
+        var result = await _ordersWorkflowService.MarkWaitingStockAsync(orderId, cancellationToken);
+        return Ok(new ApiResponse<object> { Result = result });
+    }
+
+    [HttpPut("production/orders/{orderId}/receive-stock")]
+    [Authorize(Roles = "OPERATION,ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> ReceiveStock(string orderId, CancellationToken cancellationToken)
+    {
+        var result = await _ordersWorkflowService.ReceiveStockAsync(orderId, cancellationToken);
         return Ok(new ApiResponse<object> { Result = result });
     }
 
