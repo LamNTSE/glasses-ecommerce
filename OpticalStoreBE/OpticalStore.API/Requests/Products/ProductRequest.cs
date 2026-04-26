@@ -23,4 +23,6 @@ public sealed class ProductRequest
     public decimal? WeightGram { get; set; }
 
     public string Status { get; set; } = "ACTIVE";
+
+    public List<string>? ImageUrls { get; set; }
 }

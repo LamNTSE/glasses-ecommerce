@@ -25,7 +25,7 @@ public partial class ProductVariant
 
     public string ProductId { get; set; } = null!;
 
-    public int? Quantity { get; set; }
+    // Quantity removed: inventory.Quantity is authoritative
 
     public bool? IsDeleted { get; set; }
 

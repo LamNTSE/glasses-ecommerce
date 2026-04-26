@@ -10,9 +10,12 @@ public sealed class DashboardService : IDashboardService
     private static readonly string[] ActiveOrderStatuses =
     [
         "PENDING",
+        "PAID",
         "AWAITING_VERIFICATION",
         "PREPARING",
         "CONFIRMED",
+        "PREORDER_CONFIRMED",
+        "STOCK_READY",
         "IN_PRODUCTION",
         "READY_TO_SHIP",
         "DELIVERING"

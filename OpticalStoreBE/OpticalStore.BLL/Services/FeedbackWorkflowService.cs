@@ -34,9 +34,9 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
             throw new AppException("FORBIDDEN", "You cannot submit feedback for this order.", HttpStatusCode.Forbidden);
         }
 
-        if (order.Status != "COMPLETED")
+        if (order.Status != "DELIVERED")
         {
-            throw new AppException("FEEDBACK_ORDER_NOT_COMPLETED", "Only completed orders can be reviewed.", HttpStatusCode.BadRequest);
+            throw new AppException("FEEDBACK_ORDER_NOT_DELIVERED", "Only delivered orders can be reviewed.", HttpStatusCode.BadRequest);
         }
 
         var productInOrder = await _dbContext.OrderItems

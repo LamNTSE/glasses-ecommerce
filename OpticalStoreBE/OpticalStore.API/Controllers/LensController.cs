@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Lenses;
@@ -21,7 +21,7 @@ public sealed class LensController : ControllerBase
     }
 
     [HttpPost]
-    [Authorize(Roles = "OPERATION,ADMIN")]
+    [Authorize(Roles = "OPERATION,MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<LensResponseDto>>> Create([FromBody] CreateLensRequest request, CancellationToken cancellationToken)
     {
         var result = await _lensService.CreateAsync(request.ToDto(), cancellationToken);
@@ -47,6 +47,26 @@ public sealed class LensController : ControllerBase
     {
         var result = await _lensService.GetByIdAsync(id, cancellationToken);
         return Ok(new ApiResponse<LensResponseDto> { Result = result });
+    }
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "OPERATION,MANAGER,ADMIN")]
+    public async Task<ActionResult<ApiResponse<LensResponseDto>>> Update(string id, [FromBody] CreateLensRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _lensService.UpdateAsync(id, request.ToDto(), cancellationToken);
+        return Ok(new ApiResponse<LensResponseDto>
+        {
+            Message = "Lens updated successfully",
+            Result = result
+        });
+    }
+
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "OPERATION,MANAGER,ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> Delete(string id, CancellationToken cancellationToken)
+    {
+        await _lensService.DeleteAsync(id, cancellationToken);
+        return Ok(new ApiResponse<object> { Message = "Lens deleted successfully" });
     }
 }
 

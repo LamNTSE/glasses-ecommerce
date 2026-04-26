@@ -782,7 +782,7 @@ public partial class OpticalStoreDbContext : DbContext
             entity.Property(e => e.ProductId)
                 .HasMaxLength(255)
                 .HasColumnName("product_id");
-            entity.Property(e => e.Quantity).HasColumnName("quantity");
+            // quantity column removed from product_variant; use Inventory table instead
             entity.Property(e => e.SizeLabel)
                 .HasMaxLength(255)
                 .HasColumnName("size_label");

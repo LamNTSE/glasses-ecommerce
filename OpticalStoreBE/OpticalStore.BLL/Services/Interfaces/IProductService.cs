@@ -38,6 +38,8 @@ public interface IProductService
 
     Task<List<ProductImageDto>> UploadImagesAsync(string productId, List<string> imageUrls, CancellationToken cancellationToken = default);
 
+    Task ReplaceImagesAsync(string productId, List<string> imageUrls, CancellationToken cancellationToken = default);
+
     Task DeleteImageAsync(string imageId, CancellationToken cancellationToken = default);
 
     Task<ProductResponseDto> UploadModelAsync(string productId, string modelUrl, CancellationToken cancellationToken = default);

@@ -1,7 +1,8 @@
-﻿using System.Net;
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Orders;
@@ -17,14 +18,17 @@ namespace OpticalStore.API.Controllers;
 public sealed class OrdersWorkflowController : ControllerBase
 {
     private readonly IOrdersWorkflowService _ordersWorkflowService;
+    private readonly IWebHostEnvironment _environment;
 
-    public OrdersWorkflowController(IOrdersWorkflowService ordersWorkflowService)
+    public OrdersWorkflowController(IOrdersWorkflowService ordersWorkflowService, IWebHostEnvironment environment)
     {
         _ordersWorkflowService = ordersWorkflowService;
+        _environment = environment;
     }
 
     [HttpPost("orders/create")]
     [Authorize(Roles = "CUSTOMER,ADMIN,MANAGER")]
+    [Consumes("multipart/form-data")]
     [SwaggerMultipartJsonPart("orderInfo", typeof(CreateOrderRequest))]
     public async Task<ActionResult<ApiResponse<object>>> CreateOrder(
         [FromForm] string orderInfo,
@@ -34,7 +38,13 @@ public sealed class OrdersWorkflowController : ControllerBase
     {
         var request = ParseJsonPayload<CreateOrderRequest>(orderInfo, "orderInfo");
         var userId = GetCurrentUserId();
-        var result = await _ordersWorkflowService.CreateOrderAsync(request.ToDto(), paymentMethod, userId, prescriptionImage?.FileName, cancellationToken);
+        string? imageRelativePath = null;
+        if (prescriptionImage is { Length: > 0 })
+        {
+            imageRelativePath = await PrescriptionImageStorage.SaveAsync(prescriptionImage, _environment, cancellationToken);
+        }
+
+        var result = await _ordersWorkflowService.CreateOrderAsync(request.ToDto(), paymentMethod, userId, imageRelativePath, cancellationToken);
 
         return Ok(new ApiResponse<object> { Result = result });
     }
@@ -94,7 +104,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpPut("orders/{orderId}/complete")]
-    [Authorize(Roles = "CUSTOMER,ADMIN,MANAGER")]
+    [Authorize(Roles = "CUSTOMER,ADMIN,MANAGER,SHIPPER")]
     public async Task<ActionResult<ApiResponse<object>>> CompleteOrder(string orderId, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.CompleteOrderAsync(orderId, cancellationToken);
@@ -105,7 +115,13 @@ public sealed class OrdersWorkflowController : ControllerBase
     [Authorize(Roles = "CUSTOMER,ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> UploadPrescriptionImage(string orderItemId, IFormFile file, CancellationToken cancellationToken)
     {
-        var result = await _ordersWorkflowService.UploadPrescriptionImageAsync(orderItemId, file.FileName, cancellationToken);
+        if (file is not { Length: > 0 })
+        {
+            throw new AppException("INVALID_FILE", "Prescription image file is required.", HttpStatusCode.BadRequest);
+        }
+
+        var imageRelativePath = await PrescriptionImageStorage.SaveAsync(file, _environment, cancellationToken);
+        var result = await _ordersWorkflowService.UploadPrescriptionImageAsync(orderItemId, imageRelativePath, cancellationToken);
         return Ok(new ApiResponse<object> { Result = result });
     }
 
@@ -141,6 +157,22 @@ public sealed class OrdersWorkflowController : ControllerBase
         return Ok(new ApiResponse<object> { Result = result });
     }
 
+    [HttpPut("operation/orders/{orderId}/request-stock")]
+    [Authorize(Roles = "OPERATION,ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> RequestStock(string orderId, CancellationToken cancellationToken)
+    {
+        var result = await _ordersWorkflowService.RequestStockAsync(orderId, cancellationToken);
+        return Ok(new ApiResponse<object> { Result = result });
+    }
+
+    [HttpPut("management/orders/{orderId}/stock-ready")]
+    [Authorize(Roles = "MANAGER,ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> MarkStockReady(string orderId, CancellationToken cancellationToken)
+    {
+        var result = await _ordersWorkflowService.MarkStockReadyAsync(orderId, cancellationToken);
+        return Ok(new ApiResponse<object> { Result = result });
+    }
+
     [HttpPut("production/orders/{orderId}/start")]
     [Authorize(Roles = "OPERATION,ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> StartProduction(string orderId, CancellationToken cancellationToken)
@@ -157,8 +189,16 @@ public sealed class OrdersWorkflowController : ControllerBase
         return Ok(new ApiResponse<object> { Result = result });
     }
 
-    [HttpPut("production/orders/items/{orderItemId}/status")]
+    [HttpPut("production/orders/ready-to-ship")]
     [Authorize(Roles = "OPERATION,ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> BulkReadyToShip([FromBody] BulkOrderIdsRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _ordersWorkflowService.BulkReadyToShipAsync(request.OrderIds, cancellationToken);
+        return Ok(new ApiResponse<object> { Result = result });
+    }
+
+    [HttpPut("production/orders/items/{orderItemId}/status")]
+    [Authorize(Roles = "OPERATION,ADMIN,SHIPPER")]
     public async Task<ActionResult<ApiResponse<object>>> UpdateItemStatus(string orderItemId, [FromQuery] string status, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.UpdateItemStatusAsync(orderItemId, status, cancellationToken);
@@ -166,7 +206,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpPatch("management/orders/{orderId}/start-delivery")]
-    [Authorize(Roles = "OPERATION,ADMIN")]
+    [Authorize(Roles = "OPERATION,ADMIN,SHIPPER")]
     public async Task<ActionResult<ApiResponse<object>>> StartDelivery(string orderId, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.StartDeliveryAsync(orderId, cancellationToken);
@@ -174,7 +214,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpPatch("management/orders/{orderId}/confirm-delivered")]
-    [Authorize(Roles = "OPERATION,ADMIN")]
+    [Authorize(Roles = "OPERATION,ADMIN,SHIPPER")]
     public async Task<ActionResult<ApiResponse<object>>> ConfirmDelivered(string orderId, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.ConfirmDeliveredAsync(orderId, cancellationToken);
@@ -195,7 +235,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpGet("management/orders/{orderId}")]
-    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION")]
+    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION,SHIPPER")]
     public async Task<ActionResult<ApiResponse<object>>> GetManagementOrderById(string orderId, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.GetManagementOrderByIdAsync(orderId, cancellationToken);
@@ -203,7 +243,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpGet("management/orders")]
-    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION")]
+    [Authorize(Roles = "MANAGER,ADMIN,SALE,OPERATION,SHIPPER")]
     public async Task<ActionResult<ApiResponse<object>>> GetManagementOrders(
         [FromQuery] string? status,
         [FromQuery] int page = 0,

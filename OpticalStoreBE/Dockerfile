@@ -1,19 +1,16 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-COPY OpticalStoreBE/OpticalStoreBE.sln ./
-
-COPY OpticalStoreBE/OpticalStore.API/OpticalStore.API.csproj OpticalStore.API/
-COPY OpticalStoreBE/OpticalStore.BLL/OpticalStore.BLL.csproj OpticalStore.BLL/
-COPY OpticalStoreBE/OpticalStore.DAL/OpticalStore.DAL.csproj OpticalStore.DAL/
-
+COPY OpticalStoreBE.sln ./
+COPY OpticalStore.API/OpticalStore.API.csproj OpticalStore.API/
+COPY OpticalStore.BLL/OpticalStore.BLL.csproj OpticalStore.BLL/
+COPY OpticalStore.DAL/OpticalStore.DAL.csproj OpticalStore.DAL/
 RUN dotnet restore OpticalStoreBE.sln
 
-COPY OpticalStoreBE/ .
-
+COPY . .
 RUN dotnet publish OpticalStore.API/OpticalStore.API.csproj -c Release -o /app/publish /p:UseAppHost=false
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0
+FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app
 COPY --from=build /app/publish .
 

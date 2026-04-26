@@ -5,7 +5,7 @@ namespace OpticalStore.BLL.Services.Interfaces;
 
 public interface IOrdersWorkflowService
 {
-    Task<object> CreateOrderAsync(CreateOrderDto request, string? paymentMethod, string userId, string? prescriptionImageFileName, CancellationToken cancellationToken = default);
+    Task<object> CreateOrderAsync(CreateOrderDto request, string? paymentMethod, string userId, string? prescriptionImageRelativeUrl, CancellationToken cancellationToken = default);
 
     Task<PagedResultDto<object>> GetMyOrdersAsync(string userId, string? status, int page, int size, string sortBy, string sortDir, CancellationToken cancellationToken = default);
 
@@ -17,7 +17,7 @@ public interface IOrdersWorkflowService
 
     Task<object> CompleteOrderAsync(string orderId, CancellationToken cancellationToken = default);
 
-    Task<object> UploadPrescriptionImageAsync(string orderItemId, string fileName, CancellationToken cancellationToken = default);
+    Task<object> UploadPrescriptionImageAsync(string orderItemId, string prescriptionImageRelativeUrl, CancellationToken cancellationToken = default);
 
     Task<object> UpdatePrescriptionAsync(string orderItemId, PrescriptionDto request, CancellationToken cancellationToken = default);
 
@@ -27,9 +27,15 @@ public interface IOrdersWorkflowService
 
     Task<object> RejectOrderAsync(string orderId, string? reason, CancellationToken cancellationToken = default);
 
+    Task<object> RequestStockAsync(string orderId, CancellationToken cancellationToken = default);
+
+    Task<object> MarkStockReadyAsync(string orderId, CancellationToken cancellationToken = default);
+
     Task<object> StartProductionAsync(string orderId, CancellationToken cancellationToken = default);
 
     Task<object> FinishProductionAsync(string orderId, CancellationToken cancellationToken = default);
+
+    Task<object> BulkReadyToShipAsync(IReadOnlyCollection<string> orderIds, CancellationToken cancellationToken = default);
 
     Task<object> UpdateItemStatusAsync(string orderItemId, string status, CancellationToken cancellationToken = default);
 

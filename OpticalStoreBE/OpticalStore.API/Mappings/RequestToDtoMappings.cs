@@ -49,9 +49,11 @@ public static class RequestToDtoMappings
             Username = request.Username,
             Password = request.Password,
             Email = request.Email,
+            Phone = request.Phone,
             FirstName = request.FirstName,
             LastName = request.LastName,
-            Dob = request.Dob
+            Dob = request.Dob,
+            ImageUrl = request.ImageUrl
         };
     }
 
@@ -64,7 +66,8 @@ public static class RequestToDtoMappings
             LastName = request.LastName,
             Dob = request.Dob,
             Email = request.Email,
-            Phone = request.Phone
+            Phone = request.Phone,
+            ImageUrl = request.ImageUrl
         };
     }
 

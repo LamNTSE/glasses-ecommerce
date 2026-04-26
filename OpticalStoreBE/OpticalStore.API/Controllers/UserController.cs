@@ -25,51 +25,10 @@ public sealed class UsersController : ControllerBase
 
     [HttpPost("registration")]
     [AllowAnonymous]
-    [Consumes("multipart/form-data", "application/json")]
-    [SwaggerMultipartJsonPart("UserInfor", typeof(UserRegistrationRequest))]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> Register(
-        [FromForm(Name = "UserInfor")] string? userInfor,
-        IFormFile? imageUrl,
+        [FromBody] UserRegistrationRequest request,
         CancellationToken cancellationToken)
     {
-        var userInforPayload = userInfor;
-
-        if (string.IsNullOrWhiteSpace(userInforPayload) && Request.HasFormContentType)
-        {
-            var form = await Request.ReadFormAsync(cancellationToken);
-            userInforPayload = form["UserInfor"].FirstOrDefault();
-
-            // Some clients send JSON part with content-type application/json as a file-like part.
-            if (string.IsNullOrWhiteSpace(userInforPayload))
-            {
-                var jsonPart = form.Files.GetFile("UserInfor");
-                if (jsonPart is not null)
-                {
-                    using var reader = new StreamReader(jsonPart.OpenReadStream());
-                    userInforPayload = await reader.ReadToEndAsync(cancellationToken);
-                }
-            }
-
-            imageUrl ??= form.Files.GetFile(nameof(imageUrl));
-        }
-
-        if (string.IsNullOrWhiteSpace(userInforPayload) && Request.HasJsonContentType())
-        {
-            using var reader = new StreamReader(Request.Body);
-            userInforPayload = await reader.ReadToEndAsync(cancellationToken);
-        }
-
-        if (string.IsNullOrWhiteSpace(userInforPayload))
-        {
-            ModelState.AddModelError("UserInfor", "The userInfor field is required.");
-            return ValidationProblem(ModelState);
-        }
-
-        var request = JsonSerializer.Deserialize<UserRegistrationRequest>(userInforPayload, new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true
-        }) ?? throw new ArgumentException("Invalid UserInfor payload.");
-
         var result = await _userService.RegisterAsync(request.ToDto(), cancellationToken);
 
         return Ok(new ApiResponse<UserResponseDto>
@@ -123,6 +82,18 @@ public sealed class UsersController : ControllerBase
 
         var result = await _userService.UpdateMyProfileAsync(userId, request.ToDto(), cancellationToken);
 
+        return Ok(new ApiResponse<UserResponseDto> { Result = result });
+    }
+
+    [HttpPatch("me/avatar")]
+    [Authorize(Roles = "CUSTOMER")]
+    public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateMyAvatar(
+        [FromBody] UpdateAvatarRequest request,
+        CancellationToken cancellationToken)
+    {
+        var userId = User.FindFirstValue("userId") ?? string.Empty;
+        var dto = new UserUpdateDto { ImageUrl = request.ImageUrl };
+        var result = await _userService.UpdateMyProfileAsync(userId, dto, cancellationToken);
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 

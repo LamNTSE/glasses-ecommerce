@@ -36,6 +36,10 @@ public sealed class ProductsController : ControllerBase
 
         var imageUrls = files?.Select(x => $"local://product/{Guid.NewGuid():N}-{x.FileName}").ToList() ?? new List<string>();
 
+        // Merge any URL strings provided directly in the request JSON
+        if (request.ImageUrls is { Count: > 0 })
+            imageUrls.AddRange(request.ImageUrls);
+
         var result = await _productService.CreateAsync(new ProductUpsertDto
         {
             Name = request.Name,
@@ -123,6 +127,10 @@ public sealed class ProductsController : ControllerBase
             WeightGram = request.WeightGram,
             Status = request.Status
         }, cancellationToken);
+
+        // Replace images if ImageUrls provided in the request
+        if (request.ImageUrls is not null)
+            await _productService.ReplaceImagesAsync(id, request.ImageUrls, cancellationToken);
 
         return Ok(new ApiResponse<ProductResponseDto> { Result = result });
     }

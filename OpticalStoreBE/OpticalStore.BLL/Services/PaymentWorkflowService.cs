@@ -19,9 +19,8 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
     private const string PaymentStatusUnpaid = "UNPAID";
     private const string PaymentStatusPaid = "PAID";
     private const string PaymentStatusFailed = "FAILED";
-    private const string PaymentPurposeDeposit = "DEPOSIT";
-    private const string PaymentPurposeRemaining = "REMAINING";
     private const string PaymentPurposeFull = "FULL";
+    private const string OrderStatusPaid = "PAID";
 
     private readonly OpticalStoreDbContext _dbContext;
     private readonly VnpayOptions _vnpayOptions;
@@ -37,6 +36,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         var itemRequirements = new List<PaymentRequirementItemResultDto>();
         decimal orderTotal = 0m;
         decimal requiredPaymentTotal = 0m;
+        var hasPreOrderItems = false;
 
         foreach (var item in request.Items)
         {
@@ -47,7 +47,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
 
             var variant = item.ProductVariantId is null
                 ? null
-                : await _dbContext.ProductVariants.FirstOrDefaultAsync(x => x.Id == item.ProductVariantId && !(x.IsDeleted ?? false), cancellationToken);
+                : await _dbContext.ProductVariants.Include(x => x.Inventory).FirstOrDefaultAsync(x => x.Id == item.ProductVariantId && !(x.IsDeleted ?? false), cancellationToken);
             var lens = item.LensId is null
                 ? null
                 : await _dbContext.Lens.FirstOrDefaultAsync(x => x.Id == item.LensId && !x.IsDeleted, cancellationToken);
@@ -58,7 +58,9 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             var lensPriceTotal = lensPrice * item.Quantity;
             var itemTotal = baseItemTotal + lensPriceTotal;
 
-            var paymentPercentage = string.Equals(variant?.OrderItemType, "PRE_ORDER", StringComparison.OrdinalIgnoreCase) ? 0.5m : 1m;
+            var orderItemType = ResolveOrderItemType(variant);
+            hasPreOrderItems = hasPreOrderItems || string.Equals(orderItemType, "PRE_ORDER", StringComparison.OrdinalIgnoreCase);
+            var paymentPercentage = 1m;
             var requiredPayment = baseItemTotal * paymentPercentage + lensPriceTotal;
 
             orderTotal += itemTotal;
@@ -67,7 +69,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             itemRequirements.Add(new PaymentRequirementItemResultDto
             {
                 OrderItemId = null,
-                OrderItemType = variant?.OrderItemType ?? "IN_STOCK",
+                OrderItemType = orderItemType,
                 Quantity = item.Quantity,
                 UnitPrice = unitPrice,
                 LensPrice = lensPrice,
@@ -83,16 +85,14 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
 
         return new PaymentRequirementResultDto
         {
-            DepositPercentage = 0.5m,
+            DepositPercentage = 1m,
             RequiredAmount = requiredPaymentTotal,
             OrderTotal = orderTotal,
             RequiredPaymentTotal = requiredPaymentTotal,
             RemainingPaymentTotal = remaining,
             ItemRequirements = itemRequirements,
-            AllowCod = requiredPaymentTotal == 0,
-            Message = requiredPaymentTotal == orderTotal
-                ? "Full payment is required for in-stock items."
-                : "Deposit is required for pre-order items."
+            AllowCod = !hasPreOrderItems,
+            Message = "Full payment is required for all items."
         };
     }
 
@@ -100,6 +100,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
     {
         var order = await _dbContext.Orders
             .Include(x => x.Payments)
+            .Include(x => x.OrderItems)
             .FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
 
         if (order is null)
@@ -107,17 +108,8 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             throw new AppException("ORDER_NOT_FOUND", "Order not found.", HttpStatusCode.NotFound);
         }
 
-        var hasPaidDeposit = order.Payments.Any(x => string.Equals(x.PaymentPurpose, PaymentPurposeDeposit, StringComparison.OrdinalIgnoreCase) && string.Equals(x.Status, PaymentStatusPaid, StringComparison.OrdinalIgnoreCase));
-        var purpose = (order.RemainingAmount ?? 0m) <= 0m
-            ? PaymentPurposeFull
-            : hasPaidDeposit ? PaymentPurposeRemaining : PaymentPurposeDeposit;
-
-        var amount = purpose switch
-        {
-            PaymentPurposeFull => order.TotalAmount ?? 0m,
-            PaymentPurposeDeposit => order.DepositAmount ?? 0m,
-            _ => order.RemainingAmount ?? 0m
-        };
+        var purpose = PaymentPurposeFull;
+        var amount = order.TotalAmount ?? 0m;
 
         if (amount <= 0m)
         {
@@ -197,7 +189,8 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         }
 
         var payment = await _dbContext.Payments
-            .Include(x => x.Order)
+            .Include(x => x.Order!)
+                .ThenInclude(x => x.OrderItems)
             .Include(x => x.Transactions)
             .FirstOrDefaultAsync(x => x.Id == paymentId, cancellationToken);
 
@@ -258,6 +251,17 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return BuildCallbackResult(isBrowserReturn, isSuccess, "00", "Confirm Success", payment.OrderId, payment.Id, redirectUrl);
     }
 
+    private static string ResolveOrderItemType(ProductVariant? variant)
+    {
+        if (variant?.Inventory is null)
+        {
+            return variant?.OrderItemType ?? "IN_STOCK";
+        }
+
+        var available = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
+        return available > 0 ? "IN_STOCK" : "PRE_ORDER";
+    }
+
     private void ApplySuccessfulPaymentToOrder(Payment payment)
     {
         if (payment.Order is null)
@@ -265,27 +269,10 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             return;
         }
 
-        if (string.Equals(payment.PaymentPurpose, PaymentPurposeDeposit, StringComparison.OrdinalIgnoreCase))
-        {
-            payment.Order.PreOrderStatus = "DEPOSIT_PAID";
-            payment.Order.Status = "AWAITING_VERIFICATION";
-            return;
-        }
-
-        if (string.Equals(payment.PaymentPurpose, PaymentPurposeRemaining, StringComparison.OrdinalIgnoreCase))
-        {
-            payment.Order.PreOrderStatus = "REMAINING_PAID";
-            // For successful VNPAY payments, mark order as PENDING so it enters the normal verification queue
-            payment.Order.Status = string.Equals(payment.PaymentMethod, PaymentMethodVnPay, StringComparison.OrdinalIgnoreCase)
-                ? "PENDING"
-                : "PREPARING";
-            return;
-        }
-
-        // For full payments (or other purposes) if paid via VNPAY, set to PENDING instead of PREPARING
-        payment.Order.Status = string.Equals(payment.PaymentMethod, PaymentMethodVnPay, StringComparison.OrdinalIgnoreCase)
-            ? "PENDING"
-            : "PREPARING";
+        payment.Order.DepositAmount = payment.Order.TotalAmount;
+        payment.Order.RemainingAmount = 0m;
+        payment.Order.PreOrderStatus = null;
+        payment.Order.Status = OrderStatusPaid;
     }
 
     private string BuildPaymentUrl(Payment payment, string? clientIpAddress)
