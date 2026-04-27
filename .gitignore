@@ -1,44 +1,6 @@
-############################
-# Visual Studio
-############################
+bin/
+obj/
 .vs/
-.idea/
-.vscode/
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-*.csproj.user
-
-############################
-# Build
-############################
-**/bin/
-**/obj/
-
-############################
-# Runtime
-############################
-*.dll
-*.exe
-*.pdb
-*.cache
-*.vsidx
-
-############################
-# App Secrets
-############################
-appsettings.Development.json
-secrets.json
-*.env
-
-############################
-# Logs
-############################
-*.log
-
-############################
-# OS
-############################
-Thumbs.db
-.DS_Store
+.env
+.env.local
+.env.*.local
