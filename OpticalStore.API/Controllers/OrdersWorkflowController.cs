@@ -14,7 +14,7 @@ using OpticalStore.BLL.Services.Interfaces;
 namespace OpticalStore.API.Controllers;
 
 [ApiController]
-[Tags("09. Orders")]
+[Tags("08. Orders")]
 public sealed class OrdersWorkflowController : ControllerBase
 {
     private readonly IOrdersWorkflowService _ordersWorkflowService;
@@ -146,6 +146,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     }
 
     [HttpPut("sales/orders/{orderId}/revert-verify")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "SALE,ADMIN,MANAGER")]
     public async Task<ActionResult<ApiResponse<object>>> RevertVerifyOrder(string orderId, CancellationToken cancellationToken)
     {
