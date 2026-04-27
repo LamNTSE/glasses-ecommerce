@@ -1,12 +1,15 @@
+using System.Net;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using OpticalStore.API.Mappings;
 using OpticalStore.API.Requests.Users;
 using OpticalStore.API.Responses;
 using OpticalStore.API.Swagger;
 using OpticalStore.BLL.DTOs.Users;
+using OpticalStore.BLL.Exceptions;
 using OpticalStore.BLL.Services.Interfaces;
 
 namespace OpticalStore.API.Controllers;
@@ -17,19 +20,64 @@ namespace OpticalStore.API.Controllers;
 public sealed class UsersController : ControllerBase
 {
     private readonly IUserService _userService;
+    private readonly IWebHostEnvironment _environment;
 
-    public UsersController(IUserService userService)
+    public UsersController(IUserService userService, IWebHostEnvironment environment)
     {
         _userService = userService;
+        _environment = environment;
     }
 
+    /// <summary>
+    /// Đăng ký: <c>application/json</c> (body là <see cref="UserRegistrationRequest"/>)
+    /// hoặc <c>multipart/form-data</c> với part <c>registration</c> (JSON string) và tùy chọn file <c>avatar</c>.
+    /// Một endpoint tránh 415 khi client/proxy hoặc bản deploy cũ chỉ hỗ trợ một kiểu.
+    /// </summary>
     [HttpPost("registration")]
     [AllowAnonymous]
-    public async Task<ActionResult<ApiResponse<UserResponseDto>>> Register(
-        [FromBody] UserRegistrationRequest request,
-        CancellationToken cancellationToken)
+    public async Task<ActionResult<ApiResponse<UserResponseDto>>> Register(CancellationToken cancellationToken)
     {
-        var result = await _userService.RegisterAsync(request.ToDto(), cancellationToken);
+        var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+
+        UserRegistrationRequest request;
+        UserRegistrationDto dto;
+
+        if (Request.HasFormContentType)
+        {
+            if (!Request.Form.TryGetValue("registration", out var regValues))
+            {
+                throw new AppException(
+                    "INVALID_REGISTRATION",
+                    "Thiếu trường registration (chuỗi JSON) trong form.",
+                    HttpStatusCode.BadRequest);
+            }
+
+            var registration = regValues.ToString();
+            if (string.IsNullOrWhiteSpace(registration))
+            {
+                throw new AppException("INVALID_REGISTRATION", "registration rỗng.", HttpStatusCode.BadRequest);
+            }
+
+            request = JsonSerializer.Deserialize<UserRegistrationRequest>(registration, jsonOptions)
+                ?? throw new ArgumentException("Invalid registration payload.");
+
+            dto = request.ToDto();
+            var avatar = Request.Form.Files.GetFile("avatar");
+            if (avatar is { Length: > 0 })
+            {
+                dto.ImageUrl = await UserAvatarStorage.SaveAsync(avatar, _environment, cancellationToken);
+            }
+        }
+        else
+        {
+            request = await JsonSerializer.DeserializeAsync<UserRegistrationRequest>(Request.Body, jsonOptions, cancellationToken)
+                .ConfigureAwait(false)
+                ?? throw new ArgumentException("Invalid registration payload.");
+
+            dto = request.ToDto();
+        }
+
+        var result = await _userService.RegisterAsync(dto, cancellationToken);
 
         return Ok(new ApiResponse<UserResponseDto>
         {
@@ -68,32 +116,42 @@ public sealed class UsersController : ControllerBase
     [SwaggerMultipartJsonPart("data", typeof(UserUpdateRequest))]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateMe(
         [FromForm] string data,
-        IFormFile? imageUrl,
+        IFormFile? avatar,
         CancellationToken cancellationToken)
     {
-        _ = imageUrl;
-
         var request = JsonSerializer.Deserialize<UserUpdateRequest>(data, new JsonSerializerOptions
         {
             PropertyNameCaseInsensitive = true
         }) ?? throw new ArgumentException("Invalid data payload.");
 
+        var dto = request.ToDto();
+        if (avatar is { Length: > 0 })
+        {
+            dto.ImageUrl = await UserAvatarStorage.SaveAsync(avatar, _environment, cancellationToken);
+        }
+
         var userId = User.FindFirstValue("userId") ?? string.Empty;
 
-        var result = await _userService.UpdateMyProfileAsync(userId, request.ToDto(), cancellationToken);
+        var result = await _userService.UpdateMyProfileAsync(userId, dto, cancellationToken);
 
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 
     [HttpPatch("me/avatar")]
     [Authorize(Roles = "CUSTOMER")]
+    [Consumes("multipart/form-data")]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateMyAvatar(
-        [FromBody] UpdateAvatarRequest request,
+        IFormFile avatar,
         CancellationToken cancellationToken)
     {
+        if (avatar is not { Length: > 0 })
+        {
+            throw new AppException("AVATAR_REQUIRED", "Vui lòng gửi file ảnh đại diện.", HttpStatusCode.BadRequest);
+        }
+
+        var path = await UserAvatarStorage.SaveAsync(avatar, _environment, cancellationToken);
         var userId = User.FindFirstValue("userId") ?? string.Empty;
-        var dto = new UserUpdateDto { ImageUrl = request.ImageUrl };
-        var result = await _userService.UpdateMyProfileAsync(userId, dto, cancellationToken);
+        var result = await _userService.UpdateMyProfileAsync(userId, new UserUpdateDto { ImageUrl = path }, cancellationToken);
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 

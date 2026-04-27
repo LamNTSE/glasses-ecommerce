@@ -51,10 +51,12 @@ public sealed class DashboardService : IDashboardService
             ? (currentMonthRevenue > 0m ? 100d : 0d)
             : (double)((currentMonthRevenue - previousMonthRevenue) / previousMonthRevenue * 100m);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var todayUtc = DateTime.UtcNow.Date;
 
         var activeOrders = await _dbContext.Orders.LongCountAsync(x => x.Status != null && ActiveOrderStatuses.Contains(x.Status), cancellationToken);
-        var ordersToday = await _dbContext.Orders.LongCountAsync(x => x.CreatedAt == today, cancellationToken);
+        var ordersToday = await _dbContext.Orders.LongCountAsync(
+            x => x.CreatedAt.HasValue && x.CreatedAt.Value.Date == todayUtc,
+            cancellationToken);
         var returnPending = await _dbContext.Orders.LongCountAsync(x => x.Status == "PENDING", cancellationToken);
         var lowStockItems = await _dbContext.Inventories.LongCountAsync(x => (x.Quantity ?? 0) < 10, cancellationToken);
 

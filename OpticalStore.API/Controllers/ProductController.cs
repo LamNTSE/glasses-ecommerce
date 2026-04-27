@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using OpticalStore.API.Requests.Products;
 using OpticalStore.API.Responses;
@@ -16,10 +17,12 @@ namespace OpticalStore.API.Controllers;
 public sealed class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
+    private readonly IWebHostEnvironment _environment;
 
-    public ProductsController(IProductService productService)
+    public ProductsController(IProductService productService, IWebHostEnvironment environment)
     {
         _productService = productService;
+        _environment = environment;
     }
 
     [HttpPost]
@@ -34,11 +37,35 @@ public sealed class ProductsController : ControllerBase
             PropertyNameCaseInsensitive = true
         }) ?? throw new ArgumentException("Invalid product payload.");
 
-        var imageUrls = files?.Select(x => $"local://product/{Guid.NewGuid():N}-{x.FileName}").ToList() ?? new List<string>();
+        var imageUrls = new List<string>();
+        if (files is { Count: > 0 })
+        {
+            foreach (var file in files)
+            {
+                if (imageUrls.Count >= 5)
+                {
+                    break;
+                }
 
-        // Merge any URL strings provided directly in the request JSON
+                imageUrls.Add(await ProductImageStorage.SaveAsync(file, _environment, cancellationToken));
+            }
+        }
+
         if (request.ImageUrls is { Count: > 0 })
-            imageUrls.AddRange(request.ImageUrls);
+        {
+            foreach (var url in request.ImageUrls)
+            {
+                if (imageUrls.Count >= 5)
+                {
+                    break;
+                }
+
+                if (!string.IsNullOrWhiteSpace(url))
+                {
+                    imageUrls.Add(url.Trim());
+                }
+            }
+        }
 
         var result = await _productService.CreateAsync(new ProductUpsertDto
         {
@@ -156,7 +183,12 @@ public sealed class ProductsController : ControllerBase
         List<IFormFile> files,
         CancellationToken cancellationToken)
     {
-        var imageUrls = files.Select(x => $"local://product/{Guid.NewGuid():N}-{x.FileName}").ToList();
+        var imageUrls = new List<string>();
+        foreach (var file in files)
+        {
+            imageUrls.Add(await ProductImageStorage.SaveAsync(file, _environment, cancellationToken));
+        }
+
         var result = await _productService.UploadImagesAsync(productId, imageUrls, cancellationToken);
         return Ok(new ApiResponse<List<ProductImageDto>>
         {
