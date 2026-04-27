@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using OpticalStore.BLL.Configuration;
 using OpticalStore.BLL.Services;
 using OpticalStore.BLL.Services.Interfaces;
@@ -13,6 +14,14 @@ public static class DependencyInjection
     {
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.Configure<VnpayOptions>(configuration.GetSection(VnpayOptions.SectionName));
+        services.Configure<OpenAiOptions>(configuration.GetSection(OpenAiOptions.SectionName));
+        services.AddHttpClient<IChatbotService, ChatbotService>((sp, client) =>
+        {
+            var o = sp.GetRequiredService<IOptions<OpenAiOptions>>().Value;
+            var baseUrl = string.IsNullOrWhiteSpace(o.BaseUrl) ? "https://api.openai.com/v1" : o.BaseUrl.Trim().TrimEnd('/');
+            client.BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/");
+            client.Timeout = TimeSpan.FromMinutes(1);
+        });
         services.AddDalServices(configuration);
         services.AddScoped<IAuthService, AuthService>();
         services.AddScoped<IUserService, UserService>();

@@ -15,4 +15,6 @@ public sealed class UserRegistrationRequest
     public string? LastName { get; set; }
 
     public DateOnly? Dob { get; set; }
+
+    public string? ImageUrl { get; set; }
 }

@@ -44,7 +44,7 @@ public sealed class ProductVariantService : IProductVariantService
                 SizeLabel = request.SizeLabel,
                 Price = request.Price,
                 Status = request.Status,
-                OrderItemType = request.OrderItemType,
+                OrderItemType = ResolveOrderItemType(request.Quantity, null),
                 IsDeleted = false,
                 // Quantity removed from ProductVariant; inventory.Quantity will be used
             };
@@ -53,15 +53,7 @@ public sealed class ProductVariantService : IProductVariantService
         else
         {
             // do not maintain Quantity on ProductVariant; inventory holds stock
-            if (variant.Inventory is not null)
-            {
-                var avail = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
-                variant.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
-            }
-            else
-            {
-                variant.OrderItemType = (request.Quantity ?? 0) > 0 ? "IN_STOCK" : "PRE_ORDER";
-            }
+            variant.OrderItemType = ResolveOrderItemType(request.Quantity, variant.Inventory);
         }
 
         if (variant.Inventory is null)
@@ -73,13 +65,14 @@ public sealed class ProductVariantService : IProductVariantService
                 ReservedQuantity = 0,
                 ProductVariantId = variant.Id
             };
-            var avail = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
-            variant.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
         }
         else if (request.Quantity.HasValue)
         {
+            EnsureNewQuantityRespectsReserved(request.Quantity.Value, variant.Inventory.ReservedQuantity);
             variant.Inventory.Quantity = request.Quantity;
         }
+
+        variant.OrderItemType = ResolveOrderItemType(request.Quantity, variant.Inventory);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return await GetByIdAsync(variant.Id, cancellationToken);
@@ -123,10 +116,11 @@ public sealed class ProductVariantService : IProductVariantService
         // update inventory quantity if provided
         if (variant.Inventory is not null && request.Quantity.HasValue)
         {
+            EnsureNewQuantityRespectsReserved(request.Quantity.Value, variant.Inventory.ReservedQuantity);
             variant.Inventory.Quantity = request.Quantity;
-            var avail = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
-            variant.OrderItemType = avail > 0 ? "IN_STOCK" : "PRE_ORDER";
         }
+
+        variant.OrderItemType = ResolveOrderItemType(request.Quantity, variant.Inventory);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
         return Map(variant);
@@ -167,11 +161,11 @@ public sealed class ProductVariantService : IProductVariantService
         }
         else
         {
+            EnsureNewQuantityRespectsReserved(request.ChangeAmount, variant.Inventory.ReservedQuantity);
             variant.Inventory.Quantity = request.ChangeAmount;
         }
 
-        var availAfter = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
-        variant.OrderItemType = availAfter > 0 ? "IN_STOCK" : "PRE_ORDER";
+        variant.OrderItemType = ResolveOrderItemType(null, variant.Inventory);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
 
@@ -254,7 +248,28 @@ public sealed class ProductVariantService : IProductVariantService
             Price = variant.Price,
             Quantity = variant.Inventory?.Quantity,
             Status = variant.Status,
-            OrderItemType = variant.OrderItemType
+            OrderItemType = ResolveOrderItemType(null, variant.Inventory)
         };
+    }
+
+    private static string ResolveOrderItemType(int? quantityFallback, Inventory? inventory)
+    {
+        var available = inventory is null
+            ? (quantityFallback ?? 0)
+            : (inventory.Quantity ?? 0) - (inventory.ReservedQuantity ?? 0);
+
+        return available > 0 ? "IN_STOCK" : "PRE_ORDER";
+    }
+
+    private static void EnsureNewQuantityRespectsReserved(int newQuantity, int? reserved)
+    {
+        var r = reserved ?? 0;
+        if (newQuantity < r)
+        {
+            throw new AppException(
+                "INVALID_INVENTORY",
+                $"Số lượng tồn ({newQuantity}) phải lớn hơn hoặc bằng số lượng đang giữ chỗ (reserved) ({r}).",
+                HttpStatusCode.BadRequest);
+        }
     }
 }

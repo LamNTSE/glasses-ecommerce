@@ -173,6 +173,32 @@ public sealed class ProductService : IProductService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task ReplaceImagesAsync(string productId, List<string> imageUrls, CancellationToken cancellationToken = default)
+    {
+        var product = await _dbContext.Products.Include(x => x.ProductImages)
+            .FirstOrDefaultAsync(x => x.Id == productId && x.IsDeleted != true, cancellationToken);
+
+        if (product is null)
+            throw new AppException("PRODUCT_NOT_FOUND", "Product not found.", System.Net.HttpStatusCode.NotFound);
+
+        if (imageUrls.Count > 5)
+            throw new AppException("IMAGE_LIMIT_EXCEEDED", "Maximum 5 images per product.", System.Net.HttpStatusCode.BadRequest);
+
+        _dbContext.ProductImages.RemoveRange(product.ProductImages);
+
+        foreach (var url in imageUrls)
+        {
+            _dbContext.ProductImages.Add(new ProductImage
+            {
+                Id = Guid.NewGuid().ToString(),
+                ProductId = product.Id,
+                ImageUrl = url
+            });
+        }
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     public async Task<List<ProductImageDto>> UploadImagesAsync(string productId, List<string> imageUrls, CancellationToken cancellationToken = default)
     {
         var product = await _dbContext.Products.Include(x => x.ProductImages)
@@ -235,6 +261,7 @@ public sealed class ProductService : IProductService
         return _dbContext.Products
             .Include(x => x.ProductImages)
             .Include(x => x.ProductVariants)
+                .ThenInclude(x => x.Inventory)
             .Where(x => x.IsDeleted != true);
     }
 
@@ -274,7 +301,7 @@ public sealed class ProductService : IProductService
             MinPrice = prices.Count == 0 ? null : prices.Min(),
             MaxPrice = prices.Count == 0 ? null : prices.Max(),
             Status = product.Status,
-            OrderItemType = product.ProductVariants.FirstOrDefault(x => x.IsDeleted != true)?.OrderItemType,
+            OrderItemType = ResolveOrderItemType(product.ProductVariants.FirstOrDefault(x => x.IsDeleted != true)),
             ModelUrl = product.ModelUrl,
             ImageUrl = product.ProductImages.Select(x => new ProductImageDto
             {
@@ -282,5 +309,21 @@ public sealed class ProductService : IProductService
                 ImageUrl = x.ImageUrl
             }).ToList()
         };
+    }
+
+    private static string? ResolveOrderItemType(ProductVariant? variant)
+    {
+        if (variant is null)
+        {
+            return null;
+        }
+
+        if (variant.Inventory is null)
+        {
+            return variant.OrderItemType;
+        }
+
+        var available = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
+        return available > 0 ? "IN_STOCK" : "PRE_ORDER";
     }
 }

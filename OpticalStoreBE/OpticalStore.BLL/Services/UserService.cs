@@ -11,7 +11,7 @@ namespace OpticalStore.BLL.Services;
 
 public sealed class UserService : IUserService
 {
-    private const string DefaultAvatarUrl = "https://i.pinimg.com/1200x/3a/61/2c/3a612c76f58249ad16349f0cebc9d2b6.jpg";
+    private const string DefaultAvatarUrl = "";
 
     private readonly IUserRepository _userRepository;
     private readonly IRoleRepository _roleRepository;
@@ -47,7 +47,7 @@ public sealed class UserService : IUserService
             LastName = request.LastName,
             Dob = request.Dob,
             Status = "ACTIVE",
-            ImageUrl = DefaultAvatarUrl
+            ImageUrl = !string.IsNullOrWhiteSpace(request.ImageUrl) ? request.ImageUrl : null
         };
 
         user.RoleNames.Add(customerRole);
@@ -108,6 +108,8 @@ public sealed class UserService : IUserService
         user.Dob = request.Dob ?? user.Dob;
         user.Email = request.Email ?? user.Email;
         user.Phone = request.Phone ?? user.Phone;
+        if (!string.IsNullOrWhiteSpace(request.ImageUrl))
+            user.ImageUrl = request.ImageUrl;
 
         await _userRepository.SaveChangesAsync(cancellationToken);
 

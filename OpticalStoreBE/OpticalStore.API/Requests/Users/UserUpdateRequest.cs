@@ -13,4 +13,6 @@ public sealed class UserUpdateRequest
     public string? Email { get; set; }
 
     public string? Phone { get; set; }
+
+    public string? ImageUrl { get; set; }
 }

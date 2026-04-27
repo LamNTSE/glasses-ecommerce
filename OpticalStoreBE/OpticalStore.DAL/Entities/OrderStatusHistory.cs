@@ -14,14 +14,4 @@ public partial class OrderStatusHistory
     public string? OldStatus { get; set; }
 
     public string? OrderId { get; set; }
-
-    public string? ChangedByUserId { get; set; }
-
-    public string? ChangedByRole { get; set; }
-
-    public string? Source { get; set; }
-
-    public string? Ip { get; set; }
-
-    public string? Reason { get; set; }
 }

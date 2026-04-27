@@ -55,6 +55,31 @@ public sealed class LensService : ILensService
         return Map(lens);
     }
 
+    public async Task<LensResponseDto> UpdateAsync(string id, CreateLensDto request, CancellationToken cancellationToken = default)
+    {
+        var lens = await _dbContext.Lens.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (lens is null)
+            throw new AppException("LENS_NOT_FOUND", "Lens not found.", HttpStatusCode.NotFound);
+
+        lens.Name = request.Name;
+        lens.Material = request.Material;
+        lens.Price = request.Price;
+        lens.Description = request.Description;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+        return Map(lens);
+    }
+
+    public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
+    {
+        var lens = await _dbContext.Lens.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (lens is null)
+            throw new AppException("LENS_NOT_FOUND", "Lens not found.", HttpStatusCode.NotFound);
+
+        lens.IsDeleted = true;
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     private static LensResponseDto Map(Len lens)
     {
         return new LensResponseDto
