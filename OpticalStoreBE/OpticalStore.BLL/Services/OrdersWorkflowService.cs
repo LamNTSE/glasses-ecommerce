@@ -64,6 +64,14 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
         decimal total = 0m;
         var orderItems = new List<OrderItem>();
+        var orderItemIndex = 0;
+        // Một file upload cho cả đơn: ưu tiên gắn prescription vào dòng đầu có tròng; không thì dòng đầu
+        var itemsList = request.Items.ToList();
+        var uploadTargetIndex = itemsList.FindIndex(x => !string.IsNullOrWhiteSpace(x.LensId));
+        if (uploadTargetIndex < 0)
+        {
+            uploadTargetIndex = 0;
+        }
 
         foreach (var item in request.Items)
         {
@@ -86,7 +94,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 ? null
                 : await _dbContext.Lens.FirstOrDefaultAsync(x => x.Id == item.LensId && !x.IsDeleted, cancellationToken);
 
-            var prescriptionId = await UpsertPrescription(null, item.Prescription, prescriptionImageRelativeUrl, cancellationToken);
+            var lineImage = orderItemIndex == uploadTargetIndex && !string.IsNullOrWhiteSpace(prescriptionImageRelativeUrl)
+                ? prescriptionImageRelativeUrl
+                : null;
+
+            var prescriptionId = await UpsertPrescription(null, item.Prescription, lineImage, cancellationToken);
 
             var unitPrice = variant.Price ?? 0m;
             var lensPrice = lens?.Price ?? 0m;
@@ -134,6 +146,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 RemainingPrice = lineTotal,
                 InventoryId = variant.Inventory?.Id
             });
+            orderItemIndex++;
         }
 
         var finalTotal = Math.Max(0m, total);

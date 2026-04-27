@@ -113,14 +113,18 @@ public sealed class OrdersWorkflowController : ControllerBase
 
     [HttpPut("orders/items/{orderItemId}/prescription-image")]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
-    public async Task<ActionResult<ApiResponse<object>>> UploadPrescriptionImage(string orderItemId, IFormFile file, CancellationToken cancellationToken)
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<ApiResponse<object>>> UploadPrescriptionImage(
+        string orderItemId,
+        IFormFile? prescriptionImage,
+        CancellationToken cancellationToken)
     {
-        if (file is not { Length: > 0 })
+        if (prescriptionImage is not { Length: > 0 })
         {
             throw new AppException("INVALID_FILE", "Prescription image file is required.", HttpStatusCode.BadRequest);
         }
 
-        var imageRelativePath = await PrescriptionImageStorage.SaveAsync(file, _environment, cancellationToken);
+        var imageRelativePath = await PrescriptionImageStorage.SaveAsync(prescriptionImage, _environment, cancellationToken);
         var result = await _ordersWorkflowService.UploadPrescriptionImageAsync(orderItemId, imageRelativePath, cancellationToken);
         return Ok(new ApiResponse<object> { Result = result });
     }

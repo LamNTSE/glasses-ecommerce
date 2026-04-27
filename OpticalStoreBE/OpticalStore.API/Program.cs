@@ -1,5 +1,7 @@
 using System.Text;
 using DotNetEnv;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -8,11 +10,18 @@ using OpticalStore.API.Swagger;
 using OpticalStore.BLL;
 using OpticalStore.BLL.Configuration;
 
-// Chỉ nạp .env cho local development để tránh phụ thuộc file này trên cloud.
+// Nạp .env trước khi tạo Configuration: biến môi trường OpenAI__ApiKey, …
 var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 if (string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase))
 {
 	Env.TraversePath().Load();
+}
+
+// Cwd khi F5/CLI thường là thư mục project API — tải rõ ràng (TraversePath đôi khi không thấy .env)
+var dotEnvCwd = Path.Combine(Directory.GetCurrentDirectory(), ".env");
+if (File.Exists(dotEnvCwd))
+{
+	Env.Load(dotEnvCwd);
 }
 
 var builder = WebApplication.CreateBuilder(args);
@@ -71,6 +80,13 @@ builder.Services.AddSwaggerGen(options =>
 		Version = "v1"
 	});
 
+	// File upload: schema cho IFormFile trong multipart (không dùng [FromForm] trên tham số IFormFile — Swashbuckle 6.6+)
+	options.MapType<IFormFile>(() => new OpenApiSchema
+	{
+		Type = "string",
+		Format = "binary"
+	});
+
 	options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
 	{
 		Name = "Authorization",
@@ -112,6 +128,22 @@ builder.Services.AddCors(options =>
 
 builder.Services.AddBllServices(builder.Configuration);
 
+// Chuẩn hóa OpenAI: trim, bỏ ngoặc, fallback OPENAI__ApiKey / OPENAI_API_KEY (Railway, Docker thường dùng)
+builder.Services.PostConfigure<OpenAiOptions>(o =>
+{
+	var k = o.ApiKey?.Trim();
+	if (string.IsNullOrEmpty(k)) k = Environment.GetEnvironmentVariable("OPENAI__ApiKey")?.Trim();
+	if (string.IsNullOrEmpty(k)) k = Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim();
+	if (k is { Length: >= 2 } && k[0] == '"' && k[^1] == '"') k = k[1..^1].Trim();
+	o.ApiKey = k;
+});
+
+builder.Services.PostConfigure<VnpayOptions>(o =>
+{
+	o.TmnCode = o.TmnCode?.Trim() ?? string.Empty;
+	o.HashSecret = o.HashSecret?.Trim() ?? string.Empty;
+});
+
 // jwtSection has already been extracted above
 // var jwtSection = builder.Configuration.GetSection("Jwt");
 // var jwtKey = jwtSection.GetValue<string>("Key") ?? string.Empty;
@@ -146,17 +178,15 @@ app.UseGlobalExceptionHandling();
 app.UseSwagger();
 app.UseSwaggerUI();
 
-if (app.Environment.IsDevelopment())
-{
-	app.UseHttpsRedirection();
-}
+// Tắt HttpsRedirection: profile https gây 307 5048→7273, cert dev làm fetch/axios thất bại từ FE (http) gọi API.
 
 app.UseCors("AllowAll");
 
+// File tĩnh (uploads/...) dùng không cần JWT — đặt trước auth
+app.UseStaticFiles();
+
 app.UseAuthentication();
 app.UseAuthorization();
-
-app.UseStaticFiles();
 
 app.MapControllers();
 
