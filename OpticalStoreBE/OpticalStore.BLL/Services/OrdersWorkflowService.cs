@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using OpticalStore.BLL;
 using OpticalStore.BLL.DTOs.Common;
 using OpticalStore.BLL.DTOs.Orders;
 using OpticalStore.BLL.DTOs.Notifications;
@@ -55,7 +56,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             DeliveryAddress = request.DeliveryAddress,
             RecipientName = request.RecipientName,
             PhoneNumber = request.PhoneNumber,
-            CreatedAt = DateOnly.FromDateTime(DateTime.UtcNow),
+            CreatedAt = DateTime.UtcNow,
             PaymentMethod = string.IsNullOrWhiteSpace(paymentMethod) ? null : paymentMethod,
             BankName = request.BankInfo?.BankName,
             BankAccountNumber = request.BankInfo?.BankAccountNumber,
@@ -150,7 +151,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         }
 
         var finalTotal = Math.Max(0m, total);
-        var hasPreOrderItems = orderItems.Any(x => x.OrderItemType == "PRE_ORDER");
+        var hasPreOrderItems = orderItems.Any(x => IsPreOrderOrderItemType(x.OrderItemType));
 
         if (hasPreOrderItems && !string.Equals(paymentMethod?.Trim(), "VNPAY", StringComparison.OrdinalIgnoreCase))
         {
@@ -199,8 +200,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
         query = sortBy.Trim().ToLower() switch
         {
-            "totalamount" => desc ? query.OrderByDescending(x => x.TotalAmount) : query.OrderBy(x => x.TotalAmount),
-            _ => desc ? query.OrderByDescending(x => x.CreatedAt) : query.OrderBy(x => x.CreatedAt)
+            "totalamount" => desc
+                ? query.OrderByDescending(x => x.TotalAmount).ThenByDescending(x => x.Id)
+                : query.OrderBy(x => x.TotalAmount).ThenBy(x => x.Id),
+            _ => desc
+                ? query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+                : query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
         };
 
         var safePage = Math.Max(0, page);
@@ -418,7 +423,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             throw new AppException("WORKFLOW_NOT_SUPPORTED", "Reject verification is not supported in current lifecycle.", HttpStatusCode.BadRequest);
         }
 
-        var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(x => x.OrderId == orderId && x.OrderItemType == "PRE_ORDER", cancellationToken);
+        var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
+            x => x.OrderId == orderId
+                && x.OrderItemType != null
+                && (x.OrderItemType.ToUpper() == "PRE_ORDER" || x.OrderItemType.ToUpper() == "PREORDER"),
+            cancellationToken);
         var canVerify = hasPreOrderItems
             ? order.Status is StatusPaid or "AWAITING_VERIFICATION"
             : order.Status is StatusPending or StatusPaid or "AWAITING_VERIFICATION";
@@ -465,7 +474,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     public async Task<object> RequestStockAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
-        var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(x => x.OrderId == orderId && x.OrderItemType == "PRE_ORDER", cancellationToken);
+        var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
+            x => x.OrderId == orderId
+                && x.OrderItemType != null
+                && (x.OrderItemType.ToUpper() == "PRE_ORDER" || x.OrderItemType.ToUpper() == "PREORDER"),
+            cancellationToken);
 
         if (!hasPreOrderItems)
         {
@@ -491,7 +504,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     public async Task<object> MarkStockReadyAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
-        var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(x => x.OrderId == orderId && x.OrderItemType == "PRE_ORDER", cancellationToken);
+        var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
+            x => x.OrderId == orderId
+                && x.OrderItemType != null
+                && (x.OrderItemType.ToUpper() == "PRE_ORDER" || x.OrderItemType.ToUpper() == "PREORDER"),
+            cancellationToken);
 
         if (!hasPreOrderItems)
         {
@@ -518,7 +535,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     public async Task<object> StartProductionAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
-        var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(x => x.OrderId == orderId && x.OrderItemType == "PRE_ORDER", cancellationToken);
+        var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
+            x => x.OrderId == orderId
+                && x.OrderItemType != null
+                && (x.OrderItemType.ToUpper() == "PRE_ORDER" || x.OrderItemType.ToUpper() == "PREORDER"),
+            cancellationToken);
 
         if (hasPreOrderItems)
         {
@@ -846,8 +867,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);
         query = sortBy.Trim().ToLower() switch
         {
-            "totalamount" => desc ? query.OrderByDescending(x => x.TotalAmount) : query.OrderBy(x => x.TotalAmount),
-            _ => desc ? query.OrderByDescending(x => x.CreatedAt) : query.OrderBy(x => x.CreatedAt)
+            "totalamount" => desc
+                ? query.OrderByDescending(x => x.TotalAmount).ThenByDescending(x => x.Id)
+                : query.OrderBy(x => x.TotalAmount).ThenBy(x => x.Id),
+            _ => desc
+                ? query.OrderByDescending(x => x.CreatedAt).ThenByDescending(x => x.Id)
+                : query.OrderBy(x => x.CreatedAt).ThenBy(x => x.Id)
         };
 
         var safePage = Math.Max(0, page);
@@ -910,7 +935,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             productVariantId = item.ProductVariantId,
             itemName = item.ProductVariant?.Product?.Name,
             productName = item.ProductVariant?.Product?.Name,
-            productImage = item.ProductVariant?.Product?.ProductImages.FirstOrDefault()?.ImageUrl,
+            productImage = ProductImageUrl.ResolveForClient(
+                item.ProductVariant?.Product?.ProductImages
+                    .Where(x => !string.IsNullOrWhiteSpace(x.ImageUrl))
+                    .OrderBy(x => x.Id)
+                    .Select(x => x.ImageUrl!)
+                    .FirstOrDefault()),
             variantName = item.ProductVariant is null ? null : $"{item.ProductVariant.ColorName}-{item.ProductVariant.SizeLabel}",
             orderItemType = item.OrderItemType,
             quantity = item.Quantity,
@@ -937,7 +967,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             transactionReference = x.Transactions.FirstOrDefault()?.GatewayReference
         }).ToList();
 
-        var hasPreOrderItems = order.OrderItems.Any(x => string.Equals(x.OrderItemType, "PRE_ORDER", StringComparison.OrdinalIgnoreCase));
+        var hasPreOrderItems = order.OrderItems.Any(x => IsPreOrderOrderItemType(x.OrderItemType));
         var responseStatus = GetDisplayStatus(order.Status, hasPreOrderItems, order.PreOrderStatus);
 
         return new
@@ -950,6 +980,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             phoneNumber = order.PhoneNumber,
             paymentMethod = order.PaymentMethod,
             orderStatus = responseStatus,
+            createdAt = order.CreatedAt,
             totalAmount = order.TotalAmount,
             depositAmount = order.DepositAmount,
             remainingAmount = order.RemainingAmount,
@@ -1135,6 +1166,18 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     private static bool CanCustomerCancel(string? status)
     {
         return status is StatusPending or StatusPaid or "PREPARING" or StatusConfirmed or StatusPreOrderConfirmed;
+    }
+
+    /// <summary>Đồng bộ với BuildOrderResponse: PRE_ORDER / PREORDER, mọi casing — tránh verify gán CONFIRMED thay vì PREORDER_CONFIRMED.</summary>
+    private static bool IsPreOrderOrderItemType(string? orderItemType)
+    {
+        if (string.IsNullOrWhiteSpace(orderItemType))
+        {
+            return false;
+        }
+
+        var u = orderItemType.Trim().ToUpperInvariant().Replace('-', '_');
+        return u is "PRE_ORDER" or "PREORDER";
     }
 
     private static string GetInitialOrderItemStatus(string? orderItemType, string? lensId, string? prescriptionId)

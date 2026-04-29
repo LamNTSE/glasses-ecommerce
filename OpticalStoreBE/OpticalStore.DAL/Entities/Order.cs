@@ -7,7 +7,7 @@ public partial class Order
 {
     public string Id { get; set; } = null!;
 
-    public DateOnly? CreatedAt { get; set; }
+    public DateTime? CreatedAt { get; set; }
 
     public string? DeliveryAddress { get; set; }
 

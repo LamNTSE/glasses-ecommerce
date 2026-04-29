@@ -306,7 +306,7 @@ public sealed class ProductService : IProductService
             ImageUrl = product.ProductImages.Select(x => new ProductImageDto
             {
                 Id = x.Id,
-                ImageUrl = x.ImageUrl
+                ImageUrl = ProductImageUrl.ResolveForClient(x.ImageUrl)
             }).ToList()
         };
     }

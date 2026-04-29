@@ -13,7 +13,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("notifications")]
-[Tags("13. Notifications")]
+[Tags("10. Notifications")]
 public sealed class NotificationController : ControllerBase
 {
     private static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web);

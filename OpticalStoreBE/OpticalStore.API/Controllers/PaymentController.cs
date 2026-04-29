@@ -10,7 +10,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("payment")]
-[Tags("10. Payment")]
+[Tags("09. Payment")]
 public sealed class PaymentController : ControllerBase
 {
     private readonly IPaymentWorkflowService _paymentWorkflowService;

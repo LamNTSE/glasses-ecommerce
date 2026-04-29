@@ -15,7 +15,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("feedbacks")]
-[Tags("14. Feedbacks")]
+[Tags("11. Feedbacks")]
 public sealed class FeedbackController : ControllerBase
 {
     private readonly IFeedbackWorkflowService _feedbackWorkflowService;

@@ -425,7 +425,9 @@ public partial class OpticalStoreDbContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnName("combo_id");
             entity.Property(e => e.ComboSnapshot).HasColumnName("combo_snapshot");
-            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.Property(e => e.CreatedAt)
+                .HasColumnType("timestamp(6) with time zone")
+                .HasColumnName("created_at");
             entity.Property(e => e.CustomerId)
                 .HasMaxLength(255)
                 .HasColumnName("customer_id");

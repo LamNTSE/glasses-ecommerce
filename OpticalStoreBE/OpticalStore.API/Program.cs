@@ -1,7 +1,6 @@
 using System.Text;
 using DotNetEnv;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -10,7 +9,7 @@ using OpticalStore.API.Swagger;
 using OpticalStore.BLL;
 using OpticalStore.BLL.Configuration;
 
-// Nạp .env trước khi tạo Configuration: biến môi trường OpenAI__ApiKey, …
+// Nạp .env trước khi tạo Configuration (ví dụ Vnpay__TmnCode, …)
 var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 if (string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase))
 {
@@ -127,16 +126,6 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddBllServices(builder.Configuration);
-
-// Chuẩn hóa OpenAI: trim, bỏ ngoặc, fallback OPENAI__ApiKey / OPENAI_API_KEY (Railway, Docker thường dùng)
-builder.Services.PostConfigure<OpenAiOptions>(o =>
-{
-	var k = o.ApiKey?.Trim();
-	if (string.IsNullOrEmpty(k)) k = Environment.GetEnvironmentVariable("OPENAI__ApiKey")?.Trim();
-	if (string.IsNullOrEmpty(k)) k = Environment.GetEnvironmentVariable("OPENAI_API_KEY")?.Trim();
-	if (k is { Length: >= 2 } && k[0] == '"' && k[^1] == '"') k = k[1..^1].Trim();
-	o.ApiKey = k;
-});
 
 builder.Services.PostConfigure<VnpayOptions>(o =>
 {
