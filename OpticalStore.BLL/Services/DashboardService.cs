@@ -23,11 +23,13 @@ public sealed class DashboardService : IDashboardService
 
     private readonly OpticalStoreDbContext _dbContext;
 
+    // Khoi tao service dashboard voi db context.
     public DashboardService(OpticalStoreDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    // Tong hop chi so doanh thu va hoat dong cho dashboard.
     public async Task<DashboardRevenueDto> GetRevenueDashboardAsync(CancellationToken cancellationToken = default)
     {
         var now = DateTime.UtcNow;

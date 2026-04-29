@@ -13,7 +13,7 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("notifications")]
-[Tags("10. Notifications")]
+[Tags("13. Notifications")]
 public sealed class NotificationController : ControllerBase
 {
     private static readonly JsonSerializerOptions SseJsonOptions = new(JsonSerializerDefaults.Web);
@@ -22,21 +22,25 @@ public sealed class NotificationController : ControllerBase
     private readonly INotificationService _notificationService;
     private readonly INotificationStreamService _notificationStreamService;
 
+    // Khoi tao controller va gan service cho thong bao va SSE.
     public NotificationController(INotificationService notificationService, INotificationStreamService notificationStreamService)
     {
         _notificationService = notificationService;
         _notificationStreamService = notificationStreamService;
     }
 
+    // Mo ket noi SSE de day thong bao realtime ve client.
     [HttpGet("stream")]
     [Authorize]
     public async Task Stream(CancellationToken cancellationToken)
     {
         var userId = GetCurrentUserId();
 
+        // Dang ky kenh nhan rieng cho user hien tai.
         var subscription = _notificationStreamService.Subscribe(userId);
         var heartbeatTimer = new PeriodicTimer(HeartbeatInterval);
 
+        // Cai dat header de giu ket noi SSE luon mo.
         Response.Headers.Append("Content-Type", "text/event-stream; charset=utf-8");
         Response.Headers.Append("Cache-Control", "no-cache");
         Response.Headers.Append("Connection", "keep-alive");
@@ -44,10 +48,12 @@ public sealed class NotificationController : ControllerBase
 
         try
         {
+            // Gui tin hieu da ket noi truoc khi bat dau lang nghe.
             await WriteRawEventAsync("connected", "Notification SSE connected", cancellationToken);
 
             var waitForNotificationTask = subscription.Reader.WaitToReadAsync(cancellationToken).AsTask();
 
+            // Vong lap xen ke giua heartbeat va du lieu moi.
             while (!cancellationToken.IsCancellationRequested)
             {
                 var heartbeatTask = heartbeatTimer.WaitForNextTickAsync(cancellationToken).AsTask();
@@ -55,6 +61,7 @@ public sealed class NotificationController : ControllerBase
                 var completedTask = await Task.WhenAny(waitForNotificationTask, heartbeatTask);
                 if (completedTask == heartbeatTask)
                 {
+                    // Gui goi nhip de tranh proxy cat ket noi.
                     await WriteHeartbeatAsync(cancellationToken);
                     continue;
                 }
@@ -64,6 +71,7 @@ public sealed class NotificationController : ControllerBase
                     break;
                 }
 
+                // Lay het cac thong bao dang cho va day tung cai sang client.
                 while (subscription.Reader.TryRead(out var notification))
                 {
                     await WriteEventAsync("notification", notification, cancellationToken);
@@ -83,6 +91,7 @@ public sealed class NotificationController : ControllerBase
         }
     }
 
+    // Tao thong bao moi va day ngay ve stream realtime.
     [HttpPost]
     [Authorize(Roles = "ADMIN,MANAGER")]
     public async Task<ActionResult<ApiResponse<NotificationResponseDto>>> Create([FromBody] CreateNotificationRequest request, CancellationToken cancellationToken)
@@ -94,6 +103,7 @@ public sealed class NotificationController : ControllerBase
     }
 
     [HttpGet("me")]
+    // Lay danh sach thong bao cua nguoi dung hien tai.
     [Authorize]
     public async Task<ActionResult<ApiResponse<List<NotificationResponseDto>>>> GetMine(CancellationToken cancellationToken)
     {
@@ -102,6 +112,7 @@ public sealed class NotificationController : ControllerBase
         return Ok(new ApiResponse<List<NotificationResponseDto>> { Result = result });
     }
 
+    // Dem so thong bao chua doc.
     [HttpGet("me/unread-count")]
     [Authorize]
     public async Task<ActionResult<ApiResponse<object>>> GetUnreadCount(CancellationToken cancellationToken)
@@ -115,6 +126,7 @@ public sealed class NotificationController : ControllerBase
         });
     }
 
+    // Danh dau mot thong bao la da doc.
     [HttpPatch("{notificationId}/read")]
     [Authorize]
     public async Task<ActionResult<ApiResponse<NotificationResponseDto>>> MarkAsRead(string notificationId, CancellationToken cancellationToken)
@@ -124,6 +136,7 @@ public sealed class NotificationController : ControllerBase
         return Ok(new ApiResponse<NotificationResponseDto> { Result = result });
     }
 
+    // Danh dau tat ca thong bao cua user la da doc.
     [HttpPatch("me/read-all")]
     [Authorize]
     public async Task<ActionResult<ApiResponse<object>>> MarkAllAsRead(CancellationToken cancellationToken)
@@ -137,6 +150,7 @@ public sealed class NotificationController : ControllerBase
         });
     }
 
+    // Ghi mot su kien SSE da dinh dang JSON.
     private async Task WriteEventAsync(string eventName, object data, CancellationToken cancellationToken)
     {
         var json = JsonSerializer.Serialize(data, SseJsonOptions);
@@ -145,6 +159,7 @@ public sealed class NotificationController : ControllerBase
         await Response.Body.FlushAsync(cancellationToken);
     }
 
+    // Ghi su kien SSE thuong de giu ket noi.
     private async Task WriteRawEventAsync(string eventName, string data, CancellationToken cancellationToken)
     {
         await Response.WriteAsync($"event: {eventName}\n", cancellationToken);
@@ -152,12 +167,14 @@ public sealed class NotificationController : ControllerBase
         await Response.Body.FlushAsync(cancellationToken);
     }
 
+    // Ghi goi nhip SSE de tranh timeout tu proxy hoac browser.
     private async Task WriteHeartbeatAsync(CancellationToken cancellationToken)
     {
         await Response.WriteAsync(": keep-alive\n\n", cancellationToken);
         await Response.Body.FlushAsync(cancellationToken);
     }
 
+    // Lay userId tu claim cua request hien tai.
     private string GetCurrentUserId()
     {
         return User.FindFirstValue("userId")

@@ -22,6 +22,7 @@ public sealed class UsersController : ControllerBase
     private readonly IUserService _userService;
     private readonly IWebHostEnvironment _environment;
 
+    // Khoi tao controller va gan service xu ly user.
     public UsersController(IUserService userService, IWebHostEnvironment environment)
     {
         _userService = userService;
@@ -33,6 +34,7 @@ public sealed class UsersController : ControllerBase
     /// hoặc <c>multipart/form-data</c> với part <c>registration</c> (JSON string) và tùy chọn file <c>avatar</c>.
     /// Một endpoint tránh 415 khi client/proxy hoặc bản deploy cũ chỉ hỗ trợ một kiểu.
     /// </summary>
+    // Xu ly dang ky tu JSON hoac multipart de ho tro nhieu client.
     [HttpPost("registration")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> Register(CancellationToken cancellationToken)
@@ -42,6 +44,7 @@ public sealed class UsersController : ControllerBase
         UserRegistrationRequest request;
         UserRegistrationDto dto;
 
+        // Neu request la form-data thi lay payload JSON tu field registration.
         if (Request.HasFormContentType)
         {
             if (!Request.Form.TryGetValue("registration", out var regValues))
@@ -62,6 +65,8 @@ public sealed class UsersController : ControllerBase
                 ?? throw new ArgumentException("Invalid registration payload.");
 
             dto = request.ToDto();
+
+            // Luu avatar neu client gui kem file trong form.
             var avatar = Request.Form.Files.GetFile("avatar");
             if (avatar is { Length: > 0 })
             {
@@ -70,6 +75,8 @@ public sealed class UsersController : ControllerBase
         }
         else
         {
+
+            // Neu khong phai form-data thi doc truc tiep body JSON.
             request = await JsonSerializer.DeserializeAsync<UserRegistrationRequest>(Request.Body, jsonOptions, cancellationToken)
                 .ConfigureAwait(false)
                 ?? throw new ArgumentException("Invalid registration payload.");
@@ -86,6 +93,7 @@ public sealed class UsersController : ControllerBase
         });
     }
 
+    // Lay danh sach nguoi dung theo role.
     [HttpGet]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<List<UserResponseDto>>>> GetUsers([FromQuery] string role, CancellationToken cancellationToken)
@@ -94,6 +102,7 @@ public sealed class UsersController : ControllerBase
         return Ok(new ApiResponse<List<UserResponseDto>> { Result = result });
     }
 
+    // Lay ho so cua nguoi dung hien tai.
     [HttpGet("me")]
     [Authorize]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> GetMe(CancellationToken cancellationToken)
@@ -103,6 +112,7 @@ public sealed class UsersController : ControllerBase
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 
+    // Lay thong tin user theo id.
     [HttpGet("{userId}")]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> GetById(string userId, CancellationToken cancellationToken)
@@ -111,6 +121,7 @@ public sealed class UsersController : ControllerBase
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 
+    // Cap nhat ho so cua chinh nguoi dung.
     [HttpPut("me")]
     [Authorize(Roles = "CUSTOMER")]
     [SwaggerMultipartJsonPart("data", typeof(UserUpdateRequest))]
@@ -125,6 +136,8 @@ public sealed class UsersController : ControllerBase
         }) ?? throw new ArgumentException("Invalid data payload.");
 
         var dto = request.ToDto();
+
+        // Luu avatar moi neu client gui kem file.
         if (avatar is { Length: > 0 })
         {
             dto.ImageUrl = await UserAvatarStorage.SaveAsync(avatar, _environment, cancellationToken);
@@ -137,6 +150,7 @@ public sealed class UsersController : ControllerBase
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 
+    // Cap nhat avatar cua nguoi dung hien tai.
     [HttpPatch("me/avatar")]
     [Authorize(Roles = "CUSTOMER")]
     [Consumes("multipart/form-data")]
@@ -149,12 +163,14 @@ public sealed class UsersController : ControllerBase
             throw new AppException("AVATAR_REQUIRED", "Vui lòng gửi file ảnh đại diện.", HttpStatusCode.BadRequest);
         }
 
+        // Luu file avatar truoc khi cap nhat profile.
         var path = await UserAvatarStorage.SaveAsync(avatar, _environment, cancellationToken);
         var userId = User.FindFirstValue("userId") ?? string.Empty;
         var result = await _userService.UpdateMyProfileAsync(userId, new UserUpdateDto { ImageUrl = path }, cancellationToken);
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 
+    // Cap nhat trang thai user.
     [HttpPut("{id}")]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateStatus(
@@ -166,6 +182,7 @@ public sealed class UsersController : ControllerBase
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 
+    // Cap nhat role cua user.
     [HttpPut("{id}/role")]
     [Authorize(Roles = "ADMIN")]
     public async Task<ActionResult<ApiResponse<UserResponseDto>>> UpdateRole(
@@ -177,6 +194,7 @@ public sealed class UsersController : ControllerBase
         return Ok(new ApiResponse<UserResponseDto> { Result = result });
     }
 
+    // Xoa user khoi he thong.
     [HttpDelete("{userId}")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "ADMIN")]

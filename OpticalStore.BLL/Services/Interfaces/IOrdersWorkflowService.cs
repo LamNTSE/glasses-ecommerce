@@ -13,7 +13,7 @@ public interface IOrdersWorkflowService
 
     Task<object> UpdateOrderAsync(string orderId, UpdateOrderDto request, string userId, bool isAdmin, CancellationToken cancellationToken = default);
 
-    Task<object> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default);
+    Task<object> CancelOrderAsync(string orderId, string? cancellationReason, string cancelledByRole, CancellationToken cancellationToken = default);
 
     Task<object> CompleteOrderAsync(string orderId, CancellationToken cancellationToken = default);
 
@@ -25,7 +25,7 @@ public interface IOrdersWorkflowService
 
     Task<object> RevertVerifyOrderAsync(string orderId, CancellationToken cancellationToken = default);
 
-    Task<object> RejectOrderAsync(string orderId, string? reason, CancellationToken cancellationToken = default);
+    Task<object> RejectOrderAsync(string orderId, string? reason, string cancelledByRole, CancellationToken cancellationToken = default);
 
     Task<object> RequestStockAsync(string orderId, CancellationToken cancellationToken = default);
 

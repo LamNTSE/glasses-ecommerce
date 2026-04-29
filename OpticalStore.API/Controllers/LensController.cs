@@ -15,11 +15,13 @@ public sealed class LensController : ControllerBase
 {
     private readonly ILensService _lensService;
 
+    // Khoi tao controller va gan service xu ly lens.
     public LensController(ILensService lensService)
     {
         _lensService = lensService;
     }
 
+    // Tao lens moi.
     [HttpPost]
     [Authorize(Roles = "OPERATION,MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<LensResponseDto>>> Create([FromBody] CreateLensRequest request, CancellationToken cancellationToken)
@@ -33,6 +35,7 @@ public sealed class LensController : ControllerBase
         });
     }
 
+    // Lay danh sach lens dang hoat dong.
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<List<LensResponseDto>>>> GetAll(CancellationToken cancellationToken)
@@ -41,6 +44,7 @@ public sealed class LensController : ControllerBase
         return Ok(new ApiResponse<List<LensResponseDto>> { Result = result });
     }
 
+    // Lay lens theo id.
     [HttpGet("{id}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<LensResponseDto>>> GetById(string id, CancellationToken cancellationToken)
@@ -49,6 +53,7 @@ public sealed class LensController : ControllerBase
         return Ok(new ApiResponse<LensResponseDto> { Result = result });
     }
 
+    // Cap nhat thong tin lens.
     [HttpPut("{id}")]
     [Authorize(Roles = "OPERATION,MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<LensResponseDto>>> Update(string id, [FromBody] CreateLensRequest request, CancellationToken cancellationToken)
@@ -61,6 +66,7 @@ public sealed class LensController : ControllerBase
         });
     }
 
+    // Xoa mem lens.
     [HttpDelete("{id}")]
     [Authorize(Roles = "OPERATION,MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> Delete(string id, CancellationToken cancellationToken)

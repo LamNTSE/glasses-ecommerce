@@ -9,6 +9,7 @@ public sealed class NotificationStreamService : INotificationStreamService
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<Guid, Channel<NotificationResponseDto>>> _subscriptions = new();
 
+    // Tao kenh stream moi cho user va tra ve subscription handle.
     public NotificationStreamSubscription Subscribe(string userId)
     {
         var channel = Channel.CreateUnbounded<NotificationResponseDto>(new UnboundedChannelOptions
@@ -24,6 +25,7 @@ public sealed class NotificationStreamService : INotificationStreamService
         return new NotificationStreamSubscription(subscriptionId, channel.Reader);
     }
 
+    // Phat thong bao toi tat ca subscription cua user hien tai.
     public Task PublishAsync(string userId, NotificationResponseDto notification, CancellationToken cancellationToken = default)
     {
         if (!_subscriptions.TryGetValue(userId, out var userSubscriptions))
@@ -31,6 +33,7 @@ public sealed class NotificationStreamService : INotificationStreamService
             return Task.CompletedTask;
         }
 
+        // Neu mot channel khong con nhan duoc du lieu thi go bo subscription do.
         foreach (var (subscriptionId, channel) in userSubscriptions)
         {
             if (!channel.Writer.TryWrite(notification))
@@ -42,6 +45,7 @@ public sealed class NotificationStreamService : INotificationStreamService
         return Task.CompletedTask;
     }
 
+    // Huy subscription va giai phong kenh stream.
     public void Unsubscribe(string userId, Guid subscriptionId)
     {
         if (!_subscriptions.TryGetValue(userId, out var userSubscriptions))

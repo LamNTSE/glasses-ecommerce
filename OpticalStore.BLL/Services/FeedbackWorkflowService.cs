@@ -11,11 +11,13 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
 {
     private readonly OpticalStoreDbContext _dbContext;
 
+    // Khoi tao service feedback voi db context.
     public FeedbackWorkflowService(OpticalStoreDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    // Tao feedback moi sau khi kiem tra don hang, san pham va quyen truy cap.
     public async Task<FeedbackResponseDto> CreateAsync(FeedbackCreateDto request, string userId, bool isAdmin, List<string>? uploadedImageNames, CancellationToken cancellationToken = default)
     {
         if (request.Rating < 1 || request.Rating > 5)
@@ -23,6 +25,7 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
             throw new AppException("INVALID_RATING", "Rating must be between 1 and 5.", HttpStatusCode.BadRequest);
         }
 
+        // Dam bao feedback chi duoc tao cho don da giao.
         var order = await _dbContext.Orders.Include(x => x.OrderItems).FirstOrDefaultAsync(x => x.Id == request.OrderId, cancellationToken);
         if (order is null)
         {
@@ -80,6 +83,7 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
         return await MapFeedback(entity.Id, uploadedImageNames, cancellationToken);
     }
 
+    // Cap nhat feedback hien co.
     public async Task<FeedbackResponseDto> UpdateAsync(string feedbackId, FeedbackUpdateDto request, string userId, bool isAdmin, List<string>? uploadedImageNames, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.Feedbacks.FirstOrDefaultAsync(x => x.Id == feedbackId, cancellationToken);
@@ -114,6 +118,7 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
         return await MapFeedback(entity.Id, uploadedImageNames, cancellationToken);
     }
 
+    // Xoa feedback neu nguoi dung co quyen.
     public async Task DeleteAsync(string feedbackId, string userId, bool isAdmin, CancellationToken cancellationToken = default)
     {
         var entity = await _dbContext.Feedbacks.FirstOrDefaultAsync(x => x.Id == feedbackId, cancellationToken);
@@ -131,10 +136,13 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    // Lay danh sach feedback theo san pham.
     public async Task<List<FeedbackResponseDto>> GetByProductAsync(string productId, CancellationToken cancellationToken = default)
     {
         var ids = await _dbContext.Feedbacks.Where(x => x.ProductId == productId).OrderByDescending(x => x.CreatedAt).Select(x => x.Id).ToListAsync(cancellationToken);
         var result = new List<FeedbackResponseDto>();
+
+        // Nap tung feedback de co du lieu dong bo va day du.
         foreach (var id in ids)
         {
             result.Add(await MapFeedback(id, null, cancellationToken));
@@ -143,10 +151,13 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
         return result;
     }
 
+    // Lay cac feedback cua chinh nguoi dung hien tai.
     public async Task<List<FeedbackResponseDto>> GetMineAsync(string userId, CancellationToken cancellationToken = default)
     {
         var ids = await _dbContext.Feedbacks.Where(x => x.CustomerId == userId).OrderByDescending(x => x.CreatedAt).Select(x => x.Id).ToListAsync(cancellationToken);
         var result = new List<FeedbackResponseDto>();
+
+        // Nap tung feedback de giu thu tu moi nhat truoc.
         foreach (var id in ids)
         {
             result.Add(await MapFeedback(id, null, cancellationToken));
@@ -155,6 +166,7 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
         return result;
     }
 
+    // Lay feedback theo don hang sau khi kiem tra quyen truy cap.
     public async Task<List<FeedbackResponseDto>> GetByOrderAsync(string orderId, string userId, bool isAdmin, CancellationToken cancellationToken = default)
     {
         var order = await _dbContext.Orders.FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
@@ -170,6 +182,8 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
 
         var ids = await _dbContext.Feedbacks.Where(x => x.OrderId == orderId).OrderByDescending(x => x.CreatedAt).Select(x => x.Id).ToListAsync(cancellationToken);
         var result = new List<FeedbackResponseDto>();
+
+        // Nap tung feedback de tra ve danh sach hoan chinh.
         foreach (var id in ids)
         {
             result.Add(await MapFeedback(id, null, cancellationToken));
@@ -178,11 +192,13 @@ public sealed class FeedbackWorkflowService : IFeedbackWorkflowService
         return result;
     }
 
+    // Lay chi tiet feedback theo id.
     public async Task<FeedbackResponseDto> GetByIdAsync(string feedbackId, CancellationToken cancellationToken = default)
     {
         return await MapFeedback(feedbackId, null, cancellationToken);
     }
 
+    // Chuyen entity feedback sang DTO tra ve API.
     private async Task<FeedbackResponseDto> MapFeedback(string feedbackId, List<string>? uploadedImageNames, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.Feedbacks

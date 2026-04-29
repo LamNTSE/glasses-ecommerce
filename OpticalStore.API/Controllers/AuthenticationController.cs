@@ -14,11 +14,13 @@ public sealed class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
 
+    // Khoi tao controller va gan service xu ly xac thuc.
     public AuthController(IAuthService authService)
     {
         _authService = authService;
     }
 
+    // Xu ly dang nhap va tra ve token truy cap.
     [HttpPost("login")]
     [ProducesResponseType(typeof(ApiResponse<AuthResultDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<AuthResultDto>>> Login([FromBody] LoginRequest request, CancellationToken cancellationToken)
@@ -31,8 +33,8 @@ public sealed class AuthController : ControllerBase
         });
     }
 
+    // Kiem tra token hien tai con hop le hay khong.
     [HttpPost("introspect")]
-    [ApiExplorerSettings(IgnoreApi = true)]
     [ProducesResponseType(typeof(ApiResponse<IntrospectResultDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<IntrospectResultDto>>> Introspect([FromBody] TokenRequest request, CancellationToken cancellationToken)
     {
@@ -44,6 +46,7 @@ public sealed class AuthController : ControllerBase
         });
     }
 
+    // Tao token moi bang refresh token.
     [HttpPost("refresh")]
     [ProducesResponseType(typeof(ApiResponse<AuthResultDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<AuthResultDto>>> Refresh([FromBody] TokenRequest request, CancellationToken cancellationToken)
@@ -56,6 +59,7 @@ public sealed class AuthController : ControllerBase
         });
     }
 
+    // Dang xuat va huy hieu luc token hien tai.
     [HttpPost("logout")]
     [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
     public async Task<ActionResult<ApiResponse<object>>> Logout([FromBody] TokenRequest request, CancellationToken cancellationToken)

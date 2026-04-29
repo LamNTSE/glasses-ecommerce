@@ -13,11 +13,13 @@ public sealed class ProductVariantService : IProductVariantService
 {
     private readonly OpticalStoreDbContext _dbContext;
 
+    // Khoi tao service variant san pham voi db context.
     public ProductVariantService(OpticalStoreDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    // Tao variant moi va gan inventory neu can.
     public async Task<ProductVariantDto> CreateAsync(ProductVariantUpsertDto request, CancellationToken cancellationToken = default)
     {
         var product = await _dbContext.Products.FirstOrDefaultAsync(x => x.Id == request.ProductId && x.IsDeleted != true, cancellationToken);
@@ -56,6 +58,7 @@ public sealed class ProductVariantService : IProductVariantService
             variant.OrderItemType = ResolveOrderItemType(request.Quantity, variant.Inventory);
         }
 
+        // Dam bao variant luon co inventory de quan ly ton kho.
         if (variant.Inventory is null)
         {
             variant.Inventory = new Inventory
@@ -78,6 +81,7 @@ public sealed class ProductVariantService : IProductVariantService
         return await GetByIdAsync(variant.Id, cancellationToken);
     }
 
+    // Lay variant theo id va kiem tra ton tai.
     public async Task<ProductVariantDto> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
         var variant = await _dbContext.ProductVariants
@@ -92,6 +96,7 @@ public sealed class ProductVariantService : IProductVariantService
         return Map(variant);
     }
 
+    // Cap nhat thong tin variant va ton kho lien quan.
     public async Task<ProductVariantDto> UpdateAsync(string id, ProductVariantUpsertDto request, CancellationToken cancellationToken = default)
     {
         var variant = await _dbContext.ProductVariants
@@ -113,7 +118,7 @@ public sealed class ProductVariantService : IProductVariantService
         variant.Status = request.Status;
         variant.OrderItemType = request.OrderItemType;
 
-        // update inventory quantity if provided
+        // Chi cap nhat inventory khi client gui so luong moi.
         if (variant.Inventory is not null && request.Quantity.HasValue)
         {
             EnsureNewQuantityRespectsReserved(request.Quantity.Value, variant.Inventory.ReservedQuantity);
@@ -126,6 +131,7 @@ public sealed class ProductVariantService : IProductVariantService
         return Map(variant);
     }
 
+    // Xoa mem variant.
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
         var variant = await _dbContext.ProductVariants.FirstOrDefaultAsync(x => x.Id == id && x.IsDeleted != true, cancellationToken);
@@ -138,6 +144,7 @@ public sealed class ProductVariantService : IProductVariantService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    // Cap nhat ton kho doc lap cho mot variant.
     public async Task<InventoryUpdateResultDto> UpdateInventoryAsync(InventoryUpdateDto request, CancellationToken cancellationToken = default)
     {
         var variant = await _dbContext.ProductVariants
@@ -177,6 +184,7 @@ public sealed class ProductVariantService : IProductVariantService
         };
     }
 
+    // Lay danh sach variant theo san pham va cac bo loc tim kiem.
     public async Task<PagedResultDto<ProductVariantDto>> GetByProductIdAsync(
         string productId,
         string? q,
@@ -233,6 +241,7 @@ public sealed class ProductVariantService : IProductVariantService
         };
     }
 
+    // Chuyen entity variant sang DTO tra ve API.
     private static ProductVariantDto Map(ProductVariant variant)
     {
         return new ProductVariantDto
@@ -252,6 +261,7 @@ public sealed class ProductVariantService : IProductVariantService
         };
     }
 
+    // Tinh trang thai ban hang dua tren ton kho hien tai hoac so luong fallback.
     private static string ResolveOrderItemType(int? quantityFallback, Inventory? inventory)
     {
         var available = inventory is null
@@ -261,6 +271,7 @@ public sealed class ProductVariantService : IProductVariantService
         return available > 0 ? "IN_STOCK" : "PRE_ORDER";
     }
 
+    // Dam bao so luong moi khong thap hon so luong dang giu cho.
     private static void EnsureNewQuantityRespectsReserved(int newQuantity, int? reserved)
     {
         var r = reserved ?? 0;

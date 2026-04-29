@@ -16,12 +16,14 @@ public sealed class UserService : IUserService
     private readonly IUserRepository _userRepository;
     private readonly IRoleRepository _roleRepository;
 
+    // Khoi tao service user voi repository nguoi dung va role.
     public UserService(IUserRepository userRepository, IRoleRepository roleRepository)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
     }
 
+    // Dang ky nguoi dung moi voi role CUSTOMER mac dinh.
     public async Task<UserResponseDto> RegisterAsync(UserRegistrationDto request, CancellationToken cancellationToken = default)
     {
         var existed = await _userRepository.ExistsByUsernameAsync(request.Username, cancellationToken);
@@ -58,6 +60,7 @@ public sealed class UserService : IUserService
         return await GetByIdAsync(user.Id, cancellationToken);
     }
 
+    // Lay danh sach user, co the loc theo role.
     public async Task<List<UserResponseDto>> GetUsersAsync(string role, CancellationToken cancellationToken = default)
     {
         var users = await _userRepository.GetUsersWithSecurityAsync(cancellationToken);
@@ -72,11 +75,13 @@ public sealed class UserService : IUserService
         return users.Select(MapUser).ToList();
     }
 
+    // Lay profile cua chinh nguoi dung.
     public async Task<UserResponseDto> GetMyProfileAsync(string userId, CancellationToken cancellationToken = default)
     {
         return await GetByIdAsync(userId, cancellationToken);
     }
 
+    // Lay user theo id va kiem tra ton tai.
     public async Task<UserResponseDto> GetByIdAsync(string userId, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByIdWithSecurityAsync(userId, cancellationToken);
@@ -89,6 +94,7 @@ public sealed class UserService : IUserService
         return MapUser(user);
     }
 
+    // Cap nhat ho so cua chinh nguoi dung.
     public async Task<UserResponseDto> UpdateMyProfileAsync(string userId, UserUpdateDto request, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByIdWithSecurityAsync(userId, cancellationToken);
@@ -108,6 +114,8 @@ public sealed class UserService : IUserService
         user.Dob = request.Dob ?? user.Dob;
         user.Email = request.Email ?? user.Email;
         user.Phone = request.Phone ?? user.Phone;
+
+        // Chi cap nhat avatar khi request co gia tri moi.
         if (!string.IsNullOrWhiteSpace(request.ImageUrl))
             user.ImageUrl = request.ImageUrl;
 
@@ -116,6 +124,7 @@ public sealed class UserService : IUserService
         return MapUser(user);
     }
 
+    // Cap nhat trang thai user.
     public async Task<UserResponseDto> UpdateStatusAsync(string userId, string status, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByIdWithSecurityAsync(userId, cancellationToken);
@@ -131,6 +140,7 @@ public sealed class UserService : IUserService
         return MapUser(user);
     }
 
+    // Cap nhat role chinh cho user.
     public async Task<UserResponseDto> UpdateRoleAsync(string userId, string role, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByIdWithSecurityAsync(userId, cancellationToken);
@@ -155,6 +165,7 @@ public sealed class UserService : IUserService
         return MapUser(user);
     }
 
+    // Xoa user khoi he thong.
     public async Task DeleteAsync(string userId, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
@@ -167,6 +178,7 @@ public sealed class UserService : IUserService
         await _userRepository.SaveChangesAsync(cancellationToken);
     }
 
+    // Chuyen entity user sang DTO de tra ve API.
     private static UserResponseDto MapUser(User user)
     {
         return new UserResponseDto

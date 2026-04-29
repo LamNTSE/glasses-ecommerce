@@ -45,6 +45,12 @@ public partial class Order
 
     public string? BankName { get; set; }
 
+    public string? CancellationReason { get; set; }
+
+    public DateTime? CancelledAt { get; set; }
+
+    public string? CancelledBy { get; set; }
+
     public string? RecipientName { get; set; }
 
     public virtual Combo? Combo { get; set; }
