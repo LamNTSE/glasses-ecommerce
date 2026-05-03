@@ -8,7 +8,8 @@ public sealed class PrescriptionRequest
 
     public double? OdCylinder { get; set; }
 
-    public int? OdAxis { get; set; }
+    /// <summary>Client có thể gửi số thập phân (parseFloat); map sang int khi convert DTO.</summary>
+    public double? OdAxis { get; set; }
 
     public double? OdAdd { get; set; }
 
@@ -18,7 +19,7 @@ public sealed class PrescriptionRequest
 
     public double? OsCylinder { get; set; }
 
-    public int? OsAxis { get; set; }
+    public double? OsAxis { get; set; }
 
     public double? OsAdd { get; set; }
 

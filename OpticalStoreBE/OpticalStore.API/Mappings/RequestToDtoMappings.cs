@@ -25,6 +25,22 @@ namespace OpticalStore.API.Mappings;
 
 public static class RequestToDtoMappings
 {
+    private static int? RoundCylinderAxisDegrees(double? value)
+    {
+        if (value is null)
+        {
+            return null;
+        }
+
+        var v = value.Value;
+        if (double.IsNaN(v) || double.IsInfinity(v))
+        {
+            return null;
+        }
+
+        return (int)Math.Round(v, MidpointRounding.AwayFromZero);
+    }
+
     public static LoginRequestDto ToDto(this LoginRequest request)
     {
         return new LoginRequestDto
@@ -245,12 +261,12 @@ public static class RequestToDtoMappings
             ImageUrl = request.ImageUrl,
             OdSphere = request.OdSphere,
             OdCylinder = request.OdCylinder,
-            OdAxis = request.OdAxis,
+            OdAxis = RoundCylinderAxisDegrees(request.OdAxis),
             OdAdd = request.OdAdd,
             OdPd = request.OdPd,
             OsSphere = request.OsSphere,
             OsCylinder = request.OsCylinder,
-            OsAxis = request.OsAxis,
+            OsAxis = RoundCylinderAxisDegrees(request.OsAxis),
             OsAdd = request.OsAdd,
             OsPd = request.OsPd,
             Note = request.Note

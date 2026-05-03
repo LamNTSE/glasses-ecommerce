@@ -19,12 +19,14 @@ public sealed class ProductsController : ControllerBase
     private readonly IProductService _productService;
     private readonly IWebHostEnvironment _environment;
 
+    // Khoi tao controller va gan service xu ly san pham.
     public ProductsController(IProductService productService, IWebHostEnvironment environment)
     {
         _productService = productService;
         _environment = environment;
     }
 
+    // Tao san pham moi va luu anh di kem neu co.
     [HttpPost]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductResponseDto>>> Create(
@@ -38,6 +40,8 @@ public sealed class ProductsController : ControllerBase
         }) ?? throw new ArgumentException("Invalid product payload.");
 
         var imageUrls = new List<string>();
+
+        // Uu tien anh upload tu client, gioi han toi da 5 anh.
         if (files is { Count: > 0 })
         {
             foreach (var file in files)
@@ -51,6 +55,8 @@ public sealed class ProductsController : ControllerBase
             }
         }
 
+
+        // Bo sung them imageUrls co san trong payload neu client gui kem.
         if (request.ImageUrls is { Count: > 0 })
         {
             foreach (var url in request.ImageUrls)
@@ -89,6 +95,7 @@ public sealed class ProductsController : ControllerBase
         });
     }
 
+    // Lay san pham theo id.
     [HttpGet("{id}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductResponseDto>>> GetById(string id, CancellationToken cancellationToken)
@@ -97,6 +104,7 @@ public sealed class ProductsController : ControllerBase
         return Ok(new ApiResponse<ProductResponseDto> { Result = result });
     }
 
+    // Lay toan bo san pham dang hoat dong.
     [HttpGet]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<List<ProductResponseDto>>>> GetAll(CancellationToken cancellationToken)
@@ -105,6 +113,7 @@ public sealed class ProductsController : ControllerBase
         return Ok(new ApiResponse<List<ProductResponseDto>> { Result = result });
     }
 
+    // Loc san pham theo nhieu dieu kien tim kiem.
     [HttpGet("filter")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [AllowAnonymous]
@@ -136,6 +145,7 @@ public sealed class ProductsController : ControllerBase
         return Ok(new ApiResponse<PagedResultDto<ProductResponseDto>> { Result = result });
     }
 
+    // Cap nhat thong tin san pham va thay anh neu request co gui len.
     [HttpPut("{id}")]
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<ProductResponseDto>>> Update(string id, [FromBody] ProductRequest request, CancellationToken cancellationToken)
@@ -155,13 +165,14 @@ public sealed class ProductsController : ControllerBase
             Status = request.Status
         }, cancellationToken);
 
-        // Replace images if ImageUrls provided in the request
+        // Replace images if ImageUrls provided in the request.
         if (request.ImageUrls is not null)
             await _productService.ReplaceImagesAsync(id, request.ImageUrls, cancellationToken);
 
         return Ok(new ApiResponse<ProductResponseDto> { Result = result });
     }
 
+    // Xoa mem san pham.
     [HttpDelete("{id}")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "MANAGER,ADMIN")]
@@ -175,6 +186,7 @@ public sealed class ProductsController : ControllerBase
         });
     }
 
+    // Tai them anh san pham tu files upload.
     [HttpPost("{productId}/images")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "MANAGER,ADMIN")]
@@ -184,6 +196,8 @@ public sealed class ProductsController : ControllerBase
         CancellationToken cancellationToken)
     {
         var imageUrls = new List<string>();
+
+        // Chuyen tung file thanh duong dan luu tru.
         foreach (var file in files)
         {
             imageUrls.Add(await ProductImageStorage.SaveAsync(file, _environment, cancellationToken));
@@ -197,6 +211,7 @@ public sealed class ProductsController : ControllerBase
         });
     }
 
+    // Xoa mot anh san pham rieng le.
     [HttpDelete("images/{imageId}")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "MANAGER,ADMIN")]
@@ -210,6 +225,7 @@ public sealed class ProductsController : ControllerBase
         });
     }
 
+    // Lay danh sach variant cua san pham theo cac bo loc.
     [HttpGet("{productId}/variants")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [AllowAnonymous]
@@ -239,6 +255,7 @@ public sealed class ProductsController : ControllerBase
         return Ok(new ApiResponse<PagedResultDto<ProductVariantDto>> { Result = result });
     }
 
+    // Tai model 3D/asset lien quan cua san pham.
     [HttpPost("{productId}/model")]
     [ApiExplorerSettings(IgnoreApi = true)]
     [Authorize(Roles = "MANAGER,ADMIN")]

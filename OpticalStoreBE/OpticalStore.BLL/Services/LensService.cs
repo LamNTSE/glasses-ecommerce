@@ -12,11 +12,13 @@ public sealed class LensService : ILensService
 {
     private readonly OpticalStoreDbContext _dbContext;
 
+    // Khoi tao service lens voi db context.
     public LensService(OpticalStoreDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    // Tao lens moi trong he thong.
     public async Task<LensResponseDto> CreateAsync(CreateLensDto request, CancellationToken cancellationToken = default)
     {
         var lens = new Len
@@ -35,6 +37,7 @@ public sealed class LensService : ILensService
         return Map(lens);
     }
 
+    // Lay toan bo lens chua bi xoa.
     public async Task<List<LensResponseDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var data = await _dbContext.Lens
@@ -44,6 +47,7 @@ public sealed class LensService : ILensService
         return data.Select(Map).ToList();
     }
 
+    // Lay lens theo id va kiem tra ton tai.
     public async Task<LensResponseDto> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
         var lens = await _dbContext.Lens.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
@@ -55,6 +59,7 @@ public sealed class LensService : ILensService
         return Map(lens);
     }
 
+    // Cap nhat thong tin lens.
     public async Task<LensResponseDto> UpdateAsync(string id, CreateLensDto request, CancellationToken cancellationToken = default)
     {
         var lens = await _dbContext.Lens.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
@@ -70,6 +75,7 @@ public sealed class LensService : ILensService
         return Map(lens);
     }
 
+    // Xoa mem lens bang cach danh dau IsDeleted.
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
         var lens = await _dbContext.Lens.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
@@ -80,6 +86,7 @@ public sealed class LensService : ILensService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    // Chuyen entity lens sang DTO tra ve API.
     private static LensResponseDto Map(Len lens)
     {
         return new LensResponseDto

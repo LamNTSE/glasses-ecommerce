@@ -25,12 +25,14 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
     private readonly OpticalStoreDbContext _dbContext;
     private readonly VnpayOptions _vnpayOptions;
 
+    // Khoi tao service thanh toan va nap cau hinh VNPay.
     public PaymentWorkflowService(OpticalStoreDbContext dbContext, IOptions<VnpayOptions> vnpayOptions)
     {
         _dbContext = dbContext;
         _vnpayOptions = vnpayOptions.Value;
     }
 
+    // Tinh yeu cau thanh toan cho tung mat hang trong don.
     public async Task<PaymentRequirementResultDto> GetPaymentRequirementAsync(PaymentRequirementDto request, CancellationToken cancellationToken = default)
     {
         var itemRequirements = new List<PaymentRequirementItemResultDto>();
@@ -38,6 +40,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         decimal requiredPaymentTotal = 0m;
         var hasPreOrderItems = false;
 
+        // Duyet tung item de tinh tong tien va so tien phai thanh toan.
         foreach (var item in request.Items)
         {
             if (item.Quantity < 1)
@@ -96,6 +99,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         };
     }
 
+    // Tao giao dich checkout VNPay cho don hang.
     public async Task<string> CheckoutAsync(string orderId, string? clientIpAddress = null, CancellationToken cancellationToken = default)
     {
         var order = await _dbContext.Orders
@@ -133,16 +137,19 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return BuildPaymentUrl(payment, clientIpAddress);
     }
 
+    // Xu ly callback tra ve tu cong VNPay cho luong browser return.
     public Task<VnPayProcessResultDto> HandleVnPayReturnAsync(IReadOnlyDictionary<string, string> query, CancellationToken cancellationToken = default)
     {
         return ProcessVnPayCallbackAsync(query, true, cancellationToken);
     }
 
+    // Xu ly callback IPN tu cong VNPay cho luong server-to-server.
     public Task<VnPayProcessResultDto> HandleVnPayIpnAsync(IReadOnlyDictionary<string, string> query, CancellationToken cancellationToken = default)
     {
         return ProcessVnPayCallbackAsync(query, false, cancellationToken);
     }
 
+    // Lay lich su thanh toan cua don hang.
     public async Task<List<PaymentHistoryItemDto>> GetPaymentHistoryAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var data = await _dbContext.Payments
@@ -165,6 +172,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         }).ToList();
     }
 
+    // Xu ly toan bo logic callback VNPay va chuan hoa ket qua tra ve.
     private async Task<VnPayProcessResultDto> ProcessVnPayCallbackAsync(IReadOnlyDictionary<string, string> query, bool isBrowserReturn, CancellationToken cancellationToken)
     {
         if (query is null || query.Count == 0)
@@ -172,6 +180,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             return BuildCallbackResult(isBrowserReturn, false, "99", "Input data required", null, null);
         }
 
+        // Tach du lieu VNPay va kiem tra chu ky truoc khi xu ly tiep.
         var responseData = ExtractVnPayData(query);
         if (!responseData.TryGetValue("vnp_SecureHash", out var secureHash) || string.IsNullOrWhiteSpace(secureHash))
         {
@@ -188,6 +197,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             return BuildCallbackResult(isBrowserReturn, false, "01", "Order not found", null, null);
         }
 
+        // Nap payment va order lien quan de doi chieu so tien va trang thai.
         var payment = await _dbContext.Payments
             .Include(x => x.Order!)
                 .ThenInclude(x => x.OrderItems)
@@ -222,10 +232,12 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             return BuildCallbackResult(isBrowserReturn, true, "02", "Order already confirmed", payment.OrderId, payment.Id);
         }
 
+        // Cap nhat trang thai thanh toan va mo ta de luu vet giao dich.
         payment.PaymentDate = payment.PaymentDate ?? ToDatabaseDateTime(DateTime.UtcNow);
         payment.Status = isSuccess ? PaymentStatusPaid : PaymentStatusFailed;
         payment.Description = BuildPaymentDescription(payment, responseCode, transactionStatus, bankCode, payDate);
 
+        // Luu transaction moi neu VNPay tra ve ma giao dich moi.
         if (!string.IsNullOrWhiteSpace(transactionNo) && !payment.Transactions.Any(x => string.Equals(x.GatewayReference, transactionNo, StringComparison.OrdinalIgnoreCase)))
         {
             _dbContext.Transactions.Add(new Transaction
@@ -253,6 +265,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
 
     private static string ResolveOrderItemType(ProductVariant? variant)
     {
+        // Neu chua co inventory thi dua tren orderItemType san co, nguoc lai duyet ton kho.
         if (variant?.Inventory is null)
         {
             return variant?.OrderItemType ?? "IN_STOCK";
@@ -269,17 +282,20 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             return;
         }
 
+        // Cap nhat don hang khi thanh toan thanh cong.
         payment.Order.DepositAmount = payment.Order.TotalAmount;
         payment.Order.RemainingAmount = 0m;
         payment.Order.PreOrderStatus = null;
         payment.Order.Status = OrderStatusPaid;
     }
 
+    // Tao URL thanh toan VNPay tu thong tin payment.
     private string BuildPaymentUrl(Payment payment, string? clientIpAddress)
     {
         var createDate = DateTime.UtcNow.AddHours(7);
         var expireDate = createDate.AddMinutes(Math.Max(1, _vnpayOptions.ExpireMinutes));
 
+        // Tao payload key-value theo dung dinh dang VNPay.
         var requestData = new SortedDictionary<string, string>(StringComparer.Ordinal)
         {
             ["vnp_Amount"] = ((long)decimal.Round(payment.Amount ?? 0m, 0, MidpointRounding.AwayFromZero) * 100L).ToString(CultureInfo.InvariantCulture),
@@ -302,6 +318,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return string.Concat(_vnpayOptions.Url.TrimEnd('/'), "?", queryString, "&vnp_SecureHash=", secureHash);
     }
 
+    // Tao ket qua callback dung cho ca browser return va IPN.
     private VnPayProcessResultDto BuildCallbackResult(bool isBrowserReturn, bool isSuccess, string rspCode, string message, string? orderId, string? paymentId, string? redirectUrl = null)
     {
         return new VnPayProcessResultDto
@@ -315,11 +332,13 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         };
     }
 
+    // Xay dung URL dieu huong ve frontend sau khi xu ly VNPay.
     private string BuildFrontendRedirectUrl(string path, string? orderId, string? paymentId, string? responseCode, string? transactionStatus)
     {
         var baseUrl = _vnpayOptions.FrontendBaseUrl.TrimEnd('/');
         var queryParameters = new List<string>();
 
+        // Chi them query parameter khi co gia tri hop le.
         if (!string.IsNullOrWhiteSpace(orderId))
         {
             queryParameters.Add($"orderId={UrlEncode(orderId)}");
@@ -345,11 +364,13 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             : baseUrl + path + "?" + string.Join("&", queryParameters);
     }
 
+    // Noi chuoi query theo dinh dang URL-encoded.
     private static string BuildQueryString(IEnumerable<KeyValuePair<string, string>> parameters)
     {
         return string.Join("&", parameters.Select(parameter => $"{UrlEncode(parameter.Key)}={UrlEncode(parameter.Value)}"));
     }
 
+    // Kiem tra chu ky VNPay bang HMAC SHA512.
     private bool ValidateSignature(IReadOnlyDictionary<string, string> responseData, string expectedSignature)
     {
         var signData = responseData
@@ -362,6 +383,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return string.Equals(computedSignature, expectedSignature, StringComparison.OrdinalIgnoreCase);
     }
 
+    // Rut ra toan bo bien co tien to vnp_.
     private static Dictionary<string, string> ExtractVnPayData(IReadOnlyDictionary<string, string> query)
     {
         return query
@@ -369,6 +391,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             .ToDictionary(x => x.Key, x => x.Value, StringComparer.OrdinalIgnoreCase);
     }
 
+    // Doc so tien tu don vi nho nhat va chuyen sang decimal.
     private static bool TryReadAmount(IReadOnlyDictionary<string, string> data, string key, out decimal amount)
     {
         amount = 0m;
@@ -387,11 +410,13 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return true;
     }
 
+    // Lay gia tri query theo key neu ton tai.
     private static string ReadQueryValue(IReadOnlyDictionary<string, string> data, string key)
     {
         return TryGetValue(data, key, out var value) ? value ?? string.Empty : string.Empty;
     }
 
+    // Tim key khong phan biet hoa thuong trong dictionary.
     private static bool TryGetValue(IReadOnlyDictionary<string, string> data, string key, out string? value)
     {
         if (data.TryGetValue(key, out value))
@@ -410,6 +435,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return false;
     }
 
+    // Tinh HMAC SHA512 va tra ve chuoi hex thuong.
     private static string ComputeHmacSha512(string key, string input)
     {
         using var hmac = new HMACSHA512(Encoding.UTF8.GetBytes(key));
@@ -417,11 +443,13 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return Convert.ToHexString(hash).ToLowerInvariant();
     }
 
+    // Chuan hoa DateTime ve kieu co so lieu de tranh loi timezone.
     private static DateTime ToDatabaseDateTime(DateTime value)
     {
         return DateTime.SpecifyKind(value, DateTimeKind.Unspecified);
     }
 
+    // Tao mo ta giao dich thanh toan de luu audit log.
     private static string BuildPaymentDescription(Payment payment, string responseCode, string transactionStatus, string? bankCode, string? payDate)
     {
         var descriptionParts = new List<string>
@@ -444,6 +472,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return string.Join("; ", descriptionParts);
     }
 
+    // Tao mo ta transaction de luu chi tiet phan hoi VNPay.
     private static string BuildTransactionDescription(string responseCode, string transactionStatus, string? bankCode, string? payDate)
     {
         var descriptionParts = new List<string>
@@ -465,6 +494,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return string.Join("; ", descriptionParts);
     }
 
+    // Chuan hoa IP client truoc khi dua vao VNPay.
     private static string NormalizeIpAddress(string? clientIpAddress)
     {
         if (string.IsNullOrWhiteSpace(clientIpAddress))
@@ -490,6 +520,7 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         return clientIpAddress;
     }
 
+    // URL-encode gia tri theo dung quy tac query string.
     private static string UrlEncode(string value)
     {
         return WebUtility.UrlEncode(value) ?? string.Empty;

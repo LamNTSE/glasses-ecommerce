@@ -15,16 +15,18 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("feedbacks")]
-[Tags("11. Feedbacks")]
+[Tags("14. Feedbacks")]
 public sealed class FeedbackController : ControllerBase
 {
     private readonly IFeedbackWorkflowService _feedbackWorkflowService;
 
+    // Khoi tao controller va gan service xu ly feedback.
     public FeedbackController(IFeedbackWorkflowService feedbackWorkflowService)
     {
         _feedbackWorkflowService = feedbackWorkflowService;
     }
 
+    // Tao feedback moi kem anh dinh kem neu co.
     [HttpPost]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
     [SwaggerMultipartJsonPart("feedback", typeof(FeedbackCreateRequest))]
@@ -42,6 +44,7 @@ public sealed class FeedbackController : ControllerBase
         });
     }
 
+    // Cap nhat noi dung hoac anh feedback.
     [HttpPut("{feedbackId}")]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
     [SwaggerMultipartJsonPart("feedback", typeof(FeedbackUpdateRequest))]
@@ -54,6 +57,7 @@ public sealed class FeedbackController : ControllerBase
         return Ok(new ApiResponse<FeedbackResponseDto> { Result = result });
     }
 
+    // Xoa feedback da ton tai.
     [HttpDelete("{feedbackId}")]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
     public async Task<ActionResult<ApiResponse<object>>> Delete(string feedbackId, CancellationToken cancellationToken)
@@ -68,6 +72,7 @@ public sealed class FeedbackController : ControllerBase
         });
     }
 
+    // Lay danh sach feedback theo san pham.
     [HttpGet("product/{productId}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<List<FeedbackResponseDto>>>> GetByProduct(string productId, CancellationToken cancellationToken)
@@ -77,6 +82,7 @@ public sealed class FeedbackController : ControllerBase
         return Ok(new ApiResponse<List<FeedbackResponseDto>> { Result = result });
     }
 
+    // Lay feedback cua nguoi dung hien tai.
     [HttpGet("me")]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
     public async Task<ActionResult<ApiResponse<List<FeedbackResponseDto>>>> GetMine(CancellationToken cancellationToken)
@@ -87,6 +93,7 @@ public sealed class FeedbackController : ControllerBase
         return Ok(new ApiResponse<List<FeedbackResponseDto>> { Result = result });
     }
 
+    // Lay feedback theo don hang.
     [HttpGet("order/{orderId}")]
     [Authorize(Roles = "CUSTOMER,ADMIN")]
     public async Task<ActionResult<ApiResponse<List<FeedbackResponseDto>>>> GetByOrder(string orderId, CancellationToken cancellationToken)
@@ -97,6 +104,7 @@ public sealed class FeedbackController : ControllerBase
         return Ok(new ApiResponse<List<FeedbackResponseDto>> { Result = result });
     }
 
+    // Lay chi tiet feedback theo id.
     [HttpGet("{feedbackId}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<FeedbackResponseDto>>> GetById(string feedbackId, CancellationToken cancellationToken)
@@ -105,6 +113,7 @@ public sealed class FeedbackController : ControllerBase
         return Ok(new ApiResponse<FeedbackResponseDto> { Result = result });
     }
 
+    // Phan tich payload JSON tu form nhan len.
     private static T ParseJsonPayload<T>(string payload, string fieldName)
     {
         var parsed = JsonSerializer.Deserialize<T>(payload, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -116,11 +125,13 @@ public sealed class FeedbackController : ControllerBase
         return parsed;
     }
 
+    // Chuyen file anh thanh danh sach ten luu tru gia lap.
     private static List<string>? ToUploadedImageNames(List<IFormFile>? images)
     {
         return images?.Select(x => $"uploaded://{x.FileName}").ToList();
     }
 
+    // Lay userId tu claim cua request hien tai.
     private string GetCurrentUserId()
     {
         return User.FindFirstValue("userId")

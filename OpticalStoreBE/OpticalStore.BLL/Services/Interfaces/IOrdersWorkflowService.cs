@@ -13,7 +13,7 @@ public interface IOrdersWorkflowService
 
     Task<object> UpdateOrderAsync(string orderId, UpdateOrderDto request, string userId, bool isAdmin, CancellationToken cancellationToken = default);
 
-    Task<object> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default);
+    Task<object> CancelOrderAsync(string orderId, string? cancellationReason, string cancelledByRole, CancellationToken cancellationToken = default);
 
     Task<object> CompleteOrderAsync(string orderId, CancellationToken cancellationToken = default);
 
@@ -25,7 +25,7 @@ public interface IOrdersWorkflowService
 
     Task<object> RevertVerifyOrderAsync(string orderId, CancellationToken cancellationToken = default);
 
-    Task<object> RejectOrderAsync(string orderId, string? reason, CancellationToken cancellationToken = default);
+    Task<object> RejectOrderAsync(string orderId, string? reason, string cancelledByRole, CancellationToken cancellationToken = default);
 
     Task<object> RequestStockAsync(string orderId, CancellationToken cancellationToken = default);
 
@@ -36,6 +36,12 @@ public interface IOrdersWorkflowService
     Task<object> FinishProductionAsync(string orderId, CancellationToken cancellationToken = default);
 
     Task<object> BulkReadyToShipAsync(IReadOnlyCollection<string> orderIds, CancellationToken cancellationToken = default);
+
+    /// <summary>Vận hành báo lỗi — chuyển đơn sang ON_HOLD và lưu lý do.</summary>
+    Task<object> ReportOperationalHoldAsync(string orderId, string reason, CancellationToken cancellationToken = default);
+
+    /// <summary>Khôi phục đơn đang ON_HOLD về trạng thái trước khi tạm giữ.</summary>
+    Task<object> ResumeOperationalHoldAsync(string orderId, CancellationToken cancellationToken = default);
 
     Task<object> UpdateItemStatusAsync(string orderItemId, string status, CancellationToken cancellationToken = default);
 

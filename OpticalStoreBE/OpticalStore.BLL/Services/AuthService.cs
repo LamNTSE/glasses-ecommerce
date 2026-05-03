@@ -23,6 +23,7 @@ public sealed class AuthService : IAuthService
     private readonly JwtOptions _jwtOptions;
     private readonly TokenValidationParameters _tokenValidationParameters;
 
+    // Khoi tao service xac thuc va cau hinh validate JWT.
     public AuthService(
         IUserRepository userRepository,
         IInvalidatedTokenRepository invalidatedTokenRepository,
@@ -51,6 +52,7 @@ public sealed class AuthService : IAuthService
         };
     }
 
+    // Dang nhap va tao access token neu thong tin hop le.
     public async Task<AuthResultDto> LoginAsync(LoginRequestDto request, CancellationToken cancellationToken = default)
     {
         var normalizedUsername = request.Username.Trim();
@@ -70,6 +72,7 @@ public sealed class AuthService : IAuthService
         };
     }
 
+    // Kiem tra token hien tai con hop le hay khong.
     public async Task<IntrospectResultDto> IntrospectAsync(TokenRequestDto request, CancellationToken cancellationToken = default)
     {
         try
@@ -83,6 +86,7 @@ public sealed class AuthService : IAuthService
         }
     }
 
+    // Tao token moi sau khi xac minh refresh token.
     public async Task<AuthResultDto> RefreshAsync(TokenRequestDto request, CancellationToken cancellationToken = default)
     {
         var principal = await ValidateTokenAsync(request.Token, isRefreshFlow: true, cancellationToken);
@@ -110,6 +114,7 @@ public sealed class AuthService : IAuthService
         };
     }
 
+    // Dang xuat va danh dau token hien tai la khong hop le.
     public async Task LogoutAsync(TokenRequestDto request, CancellationToken cancellationToken = default)
     {
         try
@@ -142,6 +147,7 @@ public sealed class AuthService : IAuthService
         }
     }
 
+    // Tao access token moi tu du lieu user va role/permisson cua user.
     private string GenerateAccessToken(User user)
     {
         var utcNow = DateTime.UtcNow;
@@ -155,10 +161,12 @@ public sealed class AuthService : IAuthService
             new("userId", user.Id)
         };
 
+        // Them role va permission vao claims de phuc vu authorization.
         foreach (var role in user.RoleNames)
         {
             claims.Add(new Claim(ClaimTypes.Role, role.Name));
 
+            // Moi permission deu duoc dua vao claim rieng de phan quyen chi tiet.
             foreach (var permission in role.PermissionsNames)
             {
                 claims.Add(new Claim("permission", permission.Name));
@@ -180,6 +188,7 @@ public sealed class AuthService : IAuthService
         return TokenHandler.WriteToken(token);
     }
 
+    // Kiem tra JWT, refresh window va trang thai invalidation cua token.
     private async Task<ClaimsPrincipal> ValidateTokenAsync(string token, bool isRefreshFlow, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(token))
@@ -232,6 +241,7 @@ public sealed class AuthService : IAuthService
         return principal;
     }
 
+    // Ghi token vao danh sach invalidated de chan su dung lai.
     private async Task InvalidateTokenAsync(JwtSecurityToken token, CancellationToken cancellationToken)
     {
         var jti = token.Claims.FirstOrDefault(x => x.Type == JwtRegisteredClaimNames.Jti)?.Value;

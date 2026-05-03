@@ -26,11 +26,12 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     private const string StatusReadyToShip = "READY_TO_SHIP";
     private const string StatusDelivering = "DELIVERING";
     private const string StatusDelivered = "DELIVERED";
-
+    private const string StatusOnHold = "ON_HOLD";
     private readonly OpticalStoreDbContext _dbContext;
     private readonly INotificationService _notificationService;
     private readonly ILogger<OrdersWorkflowService> _logger;
 
+    // Khoi tao service don hang va gan cac dependency can thiet.
     public OrdersWorkflowService(
         OpticalStoreDbContext dbContext,
         INotificationService notificationService,
@@ -41,6 +42,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         _logger = logger;
     }
 
+    // Tao don hang moi va khoi tao cac order item lien quan.
     public async Task<object> CreateOrderAsync(CreateOrderDto request, string? paymentMethod, string userId, string? prescriptionImageRelativeUrl, CancellationToken cancellationToken = default)
     {
         var customer = await _dbContext.Users.FirstOrDefaultAsync(x => x.Id == userId, cancellationToken);
@@ -74,6 +76,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             uploadTargetIndex = 0;
         }
 
+        // Duyet tung item de tinh gia, gan prescription va cap nhat ton kho.
         foreach (var item in request.Items)
         {
             var variant = await _dbContext.ProductVariants
@@ -111,6 +114,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
             if (variant.Inventory is not null)
             {
+                // Chi tru kho khi item nam trong nhom IN_STOCK.
                 if (string.Equals(orderItemType, "IN_STOCK", StringComparison.OrdinalIgnoreCase))
                 {
                     var available = (variant.Inventory.Quantity ?? 0) - (variant.Inventory.ReservedQuantity ?? 0);
@@ -176,6 +180,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(order.Id, cancellationToken);
     }
 
+    // Lay danh sach don hang cua mot khach va phan trang.
     public async Task<PagedResultDto<object>> GetMyOrdersAsync(
         string userId,
         string? status,
@@ -229,6 +234,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         };
     }
 
+    // Lay chi tiet mot don hang va kiem tra quyen truy cap.
     public async Task<object> GetOrderByIdAsync(string orderId, string userId, bool isAdmin, CancellationToken cancellationToken = default)
     {
         var order = await _dbContext.Orders.FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
@@ -245,6 +251,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
+    // Cap nhat don hang khi khach con duoc phep sua.
     public async Task<object> UpdateOrderAsync(string orderId, UpdateOrderDto request, string userId, bool isAdmin, CancellationToken cancellationToken = default)
     {
         var order = await _dbContext.Orders.Include(x => x.OrderItems).FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
@@ -266,6 +273,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         order.RecipientName = request.RecipientName ?? order.RecipientName;
         order.PhoneNumber = request.PhoneNumber ?? order.PhoneNumber;
 
+        // Cap nhat tung order item va dieu chinh reserved quantity neu can.
         foreach (var update in request.Items)
         {
             var item = order.OrderItems.FirstOrDefault(x => x.Id == update.OrderItemId);
@@ -286,6 +294,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 {
                     var diff = newQty - oldQty;
                     // when increasing quantity, ensure enough available stock to reserve
+                        // Neu tang so luong thi phai dam bao ton kho du de giu cho.
                     if (diff > 0)
                     {
                         if (((inventory.ReservedQuantity ?? 0) + diff) > (inventory.Quantity ?? 0))
@@ -319,7 +328,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
-    public async Task<object> CancelOrderAsync(string orderId, CancellationToken cancellationToken = default)
+    // Huy don hang va tra lai ton kho neu co.
+    public async Task<object> CancelOrderAsync(string orderId, string? cancellationReason, string cancelledByRole, CancellationToken cancellationToken = default)
     {
         var order = await _dbContext.Orders.Include(x => x.OrderItems).FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
         if (order is null)
@@ -333,7 +343,9 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         }
 
         order.Status = "CANCELLED";
+        ApplyCancellationMetadata(order, cancellationReason, cancelledByRole);
 
+        // Hoan tra reserved quantity cho cac dong hang IN_STOCK.
         foreach (var item in order.OrderItems)
         {
             if (item.InventoryId is null || !IsInStockLine(item.OrderItemType))
@@ -366,6 +378,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
+    // Xac nhan hoan tat don hang sau khi da giao.
     public async Task<object> CompleteOrderAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await _dbContext.Orders.FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
@@ -382,6 +395,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
+    // Gan hoac cap nhat anh prescription cho order item.
     public async Task<object> UploadPrescriptionImageAsync(string orderItemId, string prescriptionImageRelativeUrl, CancellationToken cancellationToken = default)
     {
         var item = await _dbContext.OrderItems.FirstOrDefaultAsync(x => x.Id == orderItemId, cancellationToken);
@@ -398,6 +412,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return MapPrescription(prescription);
     }
 
+    // Cap nhat prescription cua order item.
     public async Task<object> UpdatePrescriptionAsync(string orderItemId, PrescriptionDto request, CancellationToken cancellationToken = default)
     {
         var item = await _dbContext.OrderItems.FirstOrDefaultAsync(x => x.Id == orderItemId, cancellationToken);
@@ -414,9 +429,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return MapPrescription(prescription);
     }
 
+    // Duyet don hang va chuyen sang trang thai tiep theo.
     public async Task<object> VerifyOrderAsync(string orderId, bool isApproved, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
 
         if (!isApproved)
         {
@@ -459,6 +476,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         };
     }
 
+    // Lua chon quay lui verify khong duoc ho tro trong lifecycle hien tai.
     public Task<object> RevertVerifyOrderAsync(string orderId, CancellationToken cancellationToken = default)
     {
         _ = orderId;
@@ -466,14 +484,17 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return Task.FromException<object>(new AppException("WORKFLOW_NOT_SUPPORTED", "Revert verification is not supported in current lifecycle.", HttpStatusCode.BadRequest));
     }
 
-    public Task<object> RejectOrderAsync(string orderId, string? reason, CancellationToken cancellationToken = default)
+    // Tu choi don hang o buoc ban hang.
+    public Task<object> RejectOrderAsync(string orderId, string? reason, string cancelledByRole, CancellationToken cancellationToken = default)
     {
-        return RejectOrderInternalAsync(orderId, reason, cancellationToken);
+        return RejectOrderInternalAsync(orderId, reason, cancelledByRole, cancellationToken);
     }
 
+    // Yeu cau nhap kho cho don preorder.
     public async Task<object> RequestStockAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
         var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
             x => x.OrderId == orderId
                 && x.OrderItemType != null
@@ -501,9 +522,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
+    // Danh dau hang da san sang sau khi da yeu cau nhap kho.
     public async Task<object> MarkStockReadyAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
         var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
             x => x.OrderId == orderId
                 && x.OrderItemType != null
@@ -532,9 +555,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
+    // Bat dau san xuat don hang.
     public async Task<object> StartProductionAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
         var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
             x => x.OrderId == orderId
                 && x.OrderItemType != null
@@ -556,6 +581,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         order.Status = StatusInProduction;
 
         var items = await _dbContext.OrderItems.Where(x => x.OrderId == orderId).ToListAsync(cancellationToken);
+
+        // Dong bo trang thai tung order item khi vao giai doan san xuat.
         foreach (var item in items)
         {
             item.Status = GetInitialOrderItemStatus(item.OrderItemType, item.LensId, item.PrescriptionId);
@@ -571,9 +598,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
+    // Ket thuc san xuat va chuyen sang san sang giao.
     public async Task<object> FinishProductionAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
 
         if (order.Status != StatusInProduction)
         {
@@ -583,6 +612,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         order.Status = StatusReadyToShip;
 
         var items = await _dbContext.OrderItems.Where(x => x.OrderId == orderId).ToListAsync(cancellationToken);
+
+        // Danh dau tat ca item da duoc san xuat xong.
         foreach (var item in items)
         {
             item.Status = "PRODUCED";
@@ -617,6 +648,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
         foreach (var order in orders)
         {
+            EnsureNotOnOperationalHold(order);
             var canMarkReady = order.Status is StatusPending or StatusPaid or StatusConfirmed
                 or StatusPreOrderConfirmed or StatusStockRequested or StatusStockReady
                 or StatusInProduction or "PROCESSING" or "PREPARING" or "PRODUCED";
@@ -646,6 +678,73 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         };
     }
 
+    // Vận hành báo lỗi — tạm dừng đơn ở giai đoạn xử lý kho / sản xuất / giao.
+    public async Task<object> ReportOperationalHoldAsync(string orderId, string reason, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new AppException("REASON_REQUIRED", "Hold reason is required.", HttpStatusCode.BadRequest);
+        }
+
+        var trimmed = reason.Trim();
+        if (trimmed.Length > 2000)
+        {
+            throw new AppException("REASON_TOO_LONG", "Hold reason exceeds maximum length.", HttpStatusCode.BadRequest);
+        }
+
+        var order = await GetOrder(orderId, cancellationToken);
+        if (order.Status == StatusOnHold)
+        {
+            throw new AppException("INVALID_ORDER_STATUS", "Order is already on hold.", HttpStatusCode.BadRequest);
+        }
+
+        if (!CanEnterOperationalHold(order.Status))
+        {
+            throw new AppException("INVALID_ORDER_STATUS", "Operational hold is not allowed in the current order status.", HttpStatusCode.BadRequest);
+        }
+
+        order.StatusBeforeHold = order.Status;
+        order.Status = StatusOnHold;
+        order.OperationalHoldReason = trimmed;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await TryNotifyOrderCustomerAsync(order,
+            "Đơn hàng tạm giữ",
+            $"Đơn hàng của bạn đang được xem xét tạm giữ trong quá trình xử lý. Lý do: {trimmed}",
+            cancellationToken);
+
+        return await BuildOrderResponse(orderId, cancellationToken);
+    }
+
+    // Khôi phục đơn ON_HOLD về trạng thái workflow trước khi tạm giữ.
+    public async Task<object> ResumeOperationalHoldAsync(string orderId, CancellationToken cancellationToken = default)
+    {
+        var order = await GetOrder(orderId, cancellationToken);
+        if (order.Status != StatusOnHold)
+        {
+            throw new AppException("INVALID_ORDER_STATUS", "Order is not on hold.", HttpStatusCode.BadRequest);
+        }
+
+        if (string.IsNullOrWhiteSpace(order.StatusBeforeHold))
+        {
+            throw new AppException("INVALID_HOLD_STATE", "Cannot resume: missing status before hold.", HttpStatusCode.BadRequest);
+        }
+
+        order.Status = order.StatusBeforeHold;
+        order.StatusBeforeHold = null;
+        order.OperationalHoldReason = null;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await TryNotifyOrderCustomerAsync(order,
+            "Đơn hàng tiếp tục xử lý",
+            $"Đơn hàng {order.Id} đã được tiếp tục trong quy trình xử lý.",
+            cancellationToken);
+
+        return await BuildOrderResponse(orderId, cancellationToken);
+    }
+
     public async Task<object> UpdateItemStatusAsync(string orderItemId, string status, CancellationToken cancellationToken = default)
     {
         var item = await _dbContext.OrderItems.FirstOrDefaultAsync(x => x.Id == orderItemId, cancellationToken);
@@ -664,6 +763,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         {
             throw new AppException("ORDER_NOT_FOUND", "Order not found for this order item.", HttpStatusCode.NotFound);
         }
+
+        EnsureNotOnOperationalHold(order);
 
         if (order.Status != StatusInProduction)
         {
@@ -738,21 +839,25 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return GetManagementOrdersInternal("CANCELLED", onlyPaid: true, null, page, size, sortBy, sortDir, cancellationToken);
     }
 
+    // Lay don quan tri theo id.
     public async Task<object> GetManagementOrderByIdAsync(string orderId, CancellationToken cancellationToken = default)
     {
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
+    // Lay danh sach don quan tri theo trang thai bo loc.
     public Task<PagedResultDto<object>> GetManagementOrdersAsync(string? status, int page, int size, string sortBy, string sortDir, CancellationToken cancellationToken = default)
     {
         return GetManagementOrdersInternal(status, onlyPaid: false, null, page, size, sortBy, sortDir, cancellationToken);
     }
 
+    // Lay don quan tri theo khach hang.
     public Task<PagedResultDto<object>> GetManagementOrdersByCustomerAsync(string customerId, int page, int size, string sortBy, string sortDir, CancellationToken cancellationToken = default)
     {
         return GetManagementOrdersInternal(null, onlyPaid: false, customerId, page, size, sortBy, sortDir, cancellationToken);
     }
 
+    // Xoa logic don hang khoi he thong quan tri.
     public async Task DeleteOrderLogicallyAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
@@ -760,11 +865,13 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    // Kiem tra gia ban va muc giam cua mot combo san pham.
     public async Task<object> PriceCheckAsync(PriceCheckDto request, CancellationToken cancellationToken = default)
     {
         var detailRows = new List<object>();
         decimal originalTotal = 0m;
 
+        // Duyet tung item de tinh tong gia goc va chi tiet.
         foreach (var item in request.Items)
         {
             var variant = await _dbContext.ProductVariants
@@ -832,6 +939,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         };
     }
 
+    // Lieu ke don hang cho trang quan tri theo bo loc va phan trang.
     private async Task<PagedResultDto<object>> GetManagementOrdersInternal(
         string? status,
         bool onlyPaid,
@@ -896,6 +1004,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         };
     }
 
+    // Dinh danh order hop le va nap du lieu lien quan.
     private async Task<Order> GetOrder(string orderId, CancellationToken cancellationToken)
     {
         var order = await _dbContext.Orders.FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
@@ -907,6 +1016,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return order;
     }
 
+    // Xay dung payload tra ve cho mot don hang.
     private async Task<object> BuildOrderResponse(string orderId, CancellationToken cancellationToken)
     {
 #pragma warning disable CS8602
@@ -981,6 +1091,9 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             paymentMethod = order.PaymentMethod,
             orderStatus = responseStatus,
             createdAt = order.CreatedAt,
+            cancellationReason = order.CancellationReason,
+            cancelledAt = order.CancelledAt,
+            cancelledBy = order.CancelledBy,
             totalAmount = order.TotalAmount,
             depositAmount = order.DepositAmount,
             remainingAmount = order.RemainingAmount,
@@ -992,11 +1105,14 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 bankName = order.BankName,
                 bankAccountNumber = order.BankAccountNumber,
                 accountHolderName = order.AccountHolderName
-            }
+            },
+            operationalHoldReason = order.OperationalHoldReason,
+            statusBeforeHold = order.StatusBeforeHold
         };
     }
 
-    private async Task<object> RejectOrderInternalAsync(string orderId, string? reason, CancellationToken cancellationToken)
+    // Xu ly tu choi don hang o nhung trang thai duoc phep.
+    private async Task<object> RejectOrderInternalAsync(string orderId, string? reason, string cancelledByRole, CancellationToken cancellationToken)
     {
         var order = await _dbContext.Orders.Include(x => x.OrderItems).FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
         if (order is null)
@@ -1004,12 +1120,15 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             throw new AppException("ORDER_NOT_FOUND", "Order not found.", HttpStatusCode.NotFound);
         }
 
-        if (order.Status is not ("AWAITING_VERIFICATION" or StatusPending or StatusPaid))
+        if (order.Status != StatusOnHold && order.Status is not ("AWAITING_VERIFICATION" or StatusPending or StatusPaid))
         {
             throw new AppException("INVALID_ORDER_STATUS", "Order cannot be rejected in current status.", HttpStatusCode.BadRequest);
         }
 
+        order.StatusBeforeHold = null;
+        order.OperationalHoldReason = null;
         order.Status = "CANCELLED";
+        ApplyCancellationMetadata(order, reason, cancelledByRole);
 
         foreach (var item in order.OrderItems)
         {
@@ -1044,14 +1163,25 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return new
         {
             orderId = order.Id,
-            orderStatus = order.Status
+            orderStatus = order.Status,
+            cancellationReason = order.CancellationReason,
+            cancelledAt = order.CancelledAt,
+            cancelledBy = order.CancelledBy
         };
+    }
+
+    private static void ApplyCancellationMetadata(Order order, string? reason, string cancelledByRole)
+    {
+        order.CancellationReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        order.CancelledAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        order.CancelledBy = cancelledByRole.Trim();
     }
 
     /// <summary>
     /// Dòng IN_STOCK: tạo đơn đã tăng reserved — giao thành công trừ cả tồn kho và reserved cùng số lượng.
     /// Dòng PRE_ORDER: tạo đơn không giữ reserved — giao thành công chỉ trừ tồn thực (hàng xuất kho).
     /// </summary>
+    // Tru ton kho khi don hang da giao thanh cong.
     private async Task ApplyInventoryOnOrderDeliveredAsync(Order order, CancellationToken cancellationToken)
     {
         foreach (var item in order.OrderItems)
@@ -1092,9 +1222,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         }
     }
 
+    // Kiem tra item co phai dong hang ton kho hay khong.
     private static bool IsInStockLine(string? orderItemType) =>
         string.Equals(orderItemType, "IN_STOCK", StringComparison.OrdinalIgnoreCase);
 
+    // Tao hoac cap nhat prescription cho order item.
     private async Task<string?> UpsertPrescription(string? prescriptionId, PrescriptionDto? request, string? presetImageRelativeUrl, CancellationToken cancellationToken)
     {
         if (request is null && string.IsNullOrWhiteSpace(presetImageRelativeUrl))
@@ -1138,6 +1270,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return prescription.Id;
     }
 
+    // Chuyen prescription entity thanh object phan hoi.
     private static object MapPrescription(Prescription prescription)
     {
         return new
@@ -1158,11 +1291,13 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         };
     }
 
+    // Kiem tra trang thai khach hang co the sua don hay khong.
     private static bool CanCustomerEdit(string? status)
     {
         return status is StatusPending or "PREPARING";
     }
 
+    // Kiem tra trang thai khach hang co the huy don hay khong.
     private static bool CanCustomerCancel(string? status)
     {
         return status is StatusPending or StatusPaid or "PREPARING" or StatusConfirmed or StatusPreOrderConfirmed;
@@ -1180,6 +1315,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return u is "PRE_ORDER" or "PREORDER";
     }
 
+    // Lay trang thai khoi tao cua tung order item.
     private static string GetInitialOrderItemStatus(string? orderItemType, string? lensId, string? prescriptionId)
     {
         var requiresProduction =
@@ -1190,6 +1326,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return requiresProduction ? "IN_PRODUCTION" : "PRODUCED";
     }
 
+    // Tinh trang thai ban hang dua tren ton kho hien tai.
     private static string ResolveOrderItemType(ProductVariant variant)
     {
         if (variant.Inventory is null)
@@ -1201,6 +1338,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return available > 0 ? "IN_STOCK" : "PRE_ORDER";
     }
 
+    // Gui thong bao ve khach hang sau moi thay doi workflow.
     private async Task TryCreateOrderNotificationAsync(string recipientId, string title, string content, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(recipientId))
@@ -1235,6 +1373,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         }
     }
 
+    // Bao dam order co customerId hop le truoc khi gui thong bao.
     private async Task TryNotifyOrderCustomerAsync(Order order, string title, string content, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(order.CustomerId))
@@ -1245,8 +1384,37 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         await TryCreateOrderNotificationAsync(order.CustomerId, title, content, cancellationToken);
     }
 
+    // Tra ve trang thai hien thi cho API, neu chua co thi tra string rong.
     private static string GetDisplayStatus(string? status, bool hasPreOrderItems, string? preOrderStatus = null)
     {
         return status ?? string.Empty;
+    }
+
+    private static void EnsureNotOnOperationalHold(Order order)
+    {
+        if (order.Status == StatusOnHold)
+        {
+            throw new AppException(
+                "ORDER_ON_HOLD",
+                "Order is on hold. Resume processing before continuing.",
+                HttpStatusCode.BadRequest);
+        }
+    }
+
+    private static bool CanEnterOperationalHold(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return false;
+        }
+
+        return status == StatusConfirmed
+            || status == StatusPreOrderConfirmed
+            || status == StatusStockRequested
+            || status == StatusStockReady
+            || status == StatusInProduction
+            || status == "PROCESSING"
+            || status == "PREPARING"
+            || status == "PRODUCED";
     }
 }

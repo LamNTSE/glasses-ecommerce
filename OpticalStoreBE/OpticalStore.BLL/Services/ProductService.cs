@@ -13,6 +13,7 @@ public sealed class ProductService : IProductService
 {
     private readonly OpticalStoreDbContext _dbContext;
 
+    // Khoi tao service san pham voi db context.
     public ProductService(OpticalStoreDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -22,6 +23,7 @@ public sealed class ProductService : IProductService
     {
         var product = new Product
         {
+            // Tao san pham moi va gan danh sach anh ban dau.
             Id = Guid.NewGuid().ToString(),
             Name = request.Name,
             Brand = request.Brand,
@@ -37,6 +39,7 @@ public sealed class ProductService : IProductService
             IsDeleted = false
         };
 
+        // Gioi han toi da 5 anh khi tao san pham moi.
         foreach (var imageUrl in imageUrls.Take(5))
         {
             product.ProductImages.Add(new ProductImage
@@ -52,6 +55,7 @@ public sealed class ProductService : IProductService
         return await GetByIdAsync(product.Id, cancellationToken);
     }
 
+    // Lay san pham theo id va kiem tra ton tai.
     public async Task<ProductResponseDto> GetByIdAsync(string id, CancellationToken cancellationToken = default)
     {
         var product = await QueryProducts()
@@ -65,12 +69,14 @@ public sealed class ProductService : IProductService
         return Map(product);
     }
 
+    // Lay toan bo san pham dang hoat dong.
     public async Task<List<ProductResponseDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var data = await QueryProducts().ToListAsync(cancellationToken);
         return data.Select(Map).ToList();
     }
 
+    // Loc san pham theo tap hop bo loc va phan trang.
     public async Task<PagedResultDto<ProductResponseDto>> FilterAsync(
         string? q,
         string? brand,
@@ -99,6 +105,7 @@ public sealed class ProductService : IProductService
             query = query.Where(x => x.Name.ToLower().Contains(q.ToLower()));
         }
 
+    // Ap dung tung bo loc neu client truyen gia tri.
         if (!string.IsNullOrWhiteSpace(brand)) query = query.Where(x => x.Brand == brand);
         if (!string.IsNullOrWhiteSpace(category)) query = query.Where(x => x.Category == category);
         if (!string.IsNullOrWhiteSpace(frameType)) query = query.Where(x => x.FrameType == frameType);
@@ -129,6 +136,7 @@ public sealed class ProductService : IProductService
         };
     }
 
+    // Cap nhat thong tin san pham.
     public async Task<ProductResponseDto> UpdateAsync(string id, ProductUpsertDto request, CancellationToken cancellationToken = default)
     {
         var product = await _dbContext.Products.FirstOrDefaultAsync(x => x.Id == id && x.IsDeleted != true, cancellationToken);
@@ -154,6 +162,7 @@ public sealed class ProductService : IProductService
         return await GetByIdAsync(id, cancellationToken);
     }
 
+    // Xoa mem san pham va toan bo variant lien quan.
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
         var product = await _dbContext.Products.Include(x => x.ProductVariants)
@@ -173,6 +182,7 @@ public sealed class ProductService : IProductService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    // Thay toan bo anh san pham bang danh sach moi.
     public async Task ReplaceImagesAsync(string productId, List<string> imageUrls, CancellationToken cancellationToken = default)
     {
         var product = await _dbContext.Products.Include(x => x.ProductImages)
@@ -184,6 +194,7 @@ public sealed class ProductService : IProductService
         if (imageUrls.Count > 5)
             throw new AppException("IMAGE_LIMIT_EXCEEDED", "Maximum 5 images per product.", System.Net.HttpStatusCode.BadRequest);
 
+    // Xoa anh cu truoc khi ghi danh sach moi.
         _dbContext.ProductImages.RemoveRange(product.ProductImages);
 
         foreach (var url in imageUrls)
@@ -199,6 +210,7 @@ public sealed class ProductService : IProductService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    // Tai them anh moi vao san pham hien co.
     public async Task<List<ProductImageDto>> UploadImagesAsync(string productId, List<string> imageUrls, CancellationToken cancellationToken = default)
     {
         var product = await _dbContext.Products.Include(x => x.ProductImages)
@@ -206,6 +218,7 @@ public sealed class ProductService : IProductService
 
         if (product is null)
         {
+                // Tao tung image entity va tra ve DTO de client cap nhat ngay.
             throw new AppException("PRODUCT_NOT_FOUND", "Product not found.", HttpStatusCode.NotFound);
         }
 
@@ -231,6 +244,7 @@ public sealed class ProductService : IProductService
         return created;
     }
 
+    // Xoa mot image rieng le.
     public async Task DeleteImageAsync(string imageId, CancellationToken cancellationToken = default)
     {
         var image = await _dbContext.ProductImages.FirstOrDefaultAsync(x => x.Id == imageId, cancellationToken);
@@ -243,6 +257,7 @@ public sealed class ProductService : IProductService
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    // Cap nhat model asset cua san pham.
     public async Task<ProductResponseDto> UploadModelAsync(string productId, string modelUrl, CancellationToken cancellationToken = default)
     {
         var product = await _dbContext.Products.FirstOrDefaultAsync(x => x.Id == productId && x.IsDeleted != true, cancellationToken);
@@ -256,6 +271,7 @@ public sealed class ProductService : IProductService
         return await GetByIdAsync(productId, cancellationToken);
     }
 
+    // Lay query goc cho san pham kem anh va variant.
     private IQueryable<Product> QueryProducts()
     {
         return _dbContext.Products
@@ -265,6 +281,7 @@ public sealed class ProductService : IProductService
             .Where(x => x.IsDeleted != true);
     }
 
+    // Sap xep san pham theo khoa ma client yeu cau.
     private static IQueryable<Product> ApplySort(IQueryable<Product> query, string? sortBy, string? sortDir)
     {
         var desc = string.Equals(sortDir, "desc", StringComparison.OrdinalIgnoreCase);

@@ -15,11 +15,13 @@ public sealed class ProductVariantController : ControllerBase
 {
     private readonly IProductVariantService _productVariantService;
 
+    // Khoi tao controller va gan service xu ly variant san pham.
     public ProductVariantController(IProductVariantService productVariantService)
     {
         _productVariantService = productVariantService;
     }
 
+    // Tao variant moi.
     [HttpPost]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductVariantDto>>> Create([FromBody] ProductVariantRequest request, CancellationToken cancellationToken)
@@ -29,6 +31,7 @@ public sealed class ProductVariantController : ControllerBase
         return Ok(new ApiResponse<ProductVariantDto> { Result = result });
     }
 
+    // Lay variant theo id.
     [HttpGet("{id}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductVariantDto>>> GetById(string id, CancellationToken cancellationToken)
@@ -37,6 +40,7 @@ public sealed class ProductVariantController : ControllerBase
         return Ok(new ApiResponse<ProductVariantDto> { Result = result });
     }
 
+    // Cap nhat thong tin variant.
     [HttpPut("{id}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<ProductVariantDto>>> Update(string id, [FromBody] ProductVariantRequest request, CancellationToken cancellationToken)
@@ -46,6 +50,7 @@ public sealed class ProductVariantController : ControllerBase
         return Ok(new ApiResponse<ProductVariantDto> { Result = result });
     }
 
+    // Xoa mem variant.
     [HttpDelete("{id}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<object>>> Delete(string id, CancellationToken cancellationToken)
@@ -54,6 +59,7 @@ public sealed class ProductVariantController : ControllerBase
         return Ok(new ApiResponse<object> { Result = null });
     }
 
+    // Cap nhat ton kho cua variant.
     [HttpPatch("inventory")]
     [Authorize(Roles = "OPERATION,MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<InventoryUpdateResultDto>>> UpdateInventory([FromBody] InventoryUpdateRequest request, CancellationToken cancellationToken)

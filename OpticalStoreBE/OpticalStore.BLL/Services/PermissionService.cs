@@ -13,11 +13,13 @@ public sealed class PermissionService : IPermissionService
 {
     private readonly OpticalStoreDbContext _dbContext;
 
+    // Khoi tao service permission voi db context.
     public PermissionService(OpticalStoreDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    // Tao permission moi neu chua ton tai.
     public async Task<PermissionDto> CreateAsync(CreatePermissionDto request, CancellationToken cancellationToken = default)
     {
         var existed = await _dbContext.Permissions.AnyAsync(x => x.Name == request.Name, cancellationToken);
@@ -42,6 +44,7 @@ public sealed class PermissionService : IPermissionService
         };
     }
 
+    // Lay toan bo permission hien co.
     public async Task<List<PermissionDto>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         return await _dbContext.Permissions
@@ -53,6 +56,7 @@ public sealed class PermissionService : IPermissionService
             .ToListAsync(cancellationToken);
     }
 
+    // Xoa permission theo ten.
     public async Task DeleteAsync(string permissionName, CancellationToken cancellationToken = default)
     {
         var permission = await _dbContext.Permissions.FirstOrDefaultAsync(x => x.Name == permissionName, cancellationToken);

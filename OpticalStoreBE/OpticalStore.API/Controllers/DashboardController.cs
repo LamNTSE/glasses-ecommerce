@@ -8,16 +8,18 @@ namespace OpticalStore.API.Controllers;
 
 [ApiController]
 [Route("dashboard")]
-[Tags("12. Dashboard")]
+[Tags("15. Dashboard")]
 public sealed class DashboardController : ControllerBase
 {
     private readonly IDashboardService _dashboardService;
 
+    // Khoi tao controller va gan service dashboard.
     public DashboardController(IDashboardService dashboardService)
     {
         _dashboardService = dashboardService;
     }
 
+    // Lay tong quan doanh thu va chi so hoat dong.
     [HttpGet("revenue")]
     [Authorize(Roles = "MANAGER,ADMIN")]
     public async Task<ActionResult<ApiResponse<DashboardRevenueDto>>> GetRevenue(CancellationToken cancellationToken)

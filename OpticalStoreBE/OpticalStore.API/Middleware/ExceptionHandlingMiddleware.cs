@@ -50,7 +50,9 @@ public sealed class ExceptionHandlingMiddleware
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unhandled exception.");
+            var innerExceptionMessage = ex.InnerException?.Message ?? string.Empty;
+            var fullMessage = $"{ex.Message} | Inner: {innerExceptionMessage}";
+            _logger.LogError(ex, "Unhandled exception: {Message}\n{StackTrace}", fullMessage, ex.StackTrace);
 
             if (context.Response.HasStarted)
             {
@@ -63,7 +65,7 @@ public sealed class ExceptionHandlingMiddleware
             var response = new ApiResponse<object>
             {
                 Code = 500,
-                Message = "Internal server error.",
+                Message = fullMessage,
                 Result = null
             };
 

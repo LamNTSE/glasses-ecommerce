@@ -16,11 +16,13 @@ public sealed class RolesController : ControllerBase
 {
     private readonly IRoleService _roleService;
 
+    // Khoi tao controller va gan service xu ly role.
     public RolesController(IRoleService roleService)
     {
         _roleService = roleService;
     }
 
+    // Tao role moi kem danh sach permission.
     [HttpPost]
     public async Task<ActionResult<ApiResponse<RoleDto>>> Create([FromBody] CreateRoleRequest request, CancellationToken cancellationToken)
     {
@@ -29,6 +31,7 @@ public sealed class RolesController : ControllerBase
         return Ok(new ApiResponse<RoleDto> { Result = result });
     }
 
+    // Lay toan bo role.
     [HttpGet]
     public async Task<ActionResult<ApiResponse<List<RoleDto>>>> GetAll(CancellationToken cancellationToken)
     {
@@ -36,6 +39,7 @@ public sealed class RolesController : ControllerBase
         return Ok(new ApiResponse<List<RoleDto>> { Result = result });
     }
 
+    // Xoa role theo ten.
     [HttpDelete("{roleName}")]
     public async Task<ActionResult<ApiResponse<object>>> Delete(string roleName, CancellationToken cancellationToken)
     {

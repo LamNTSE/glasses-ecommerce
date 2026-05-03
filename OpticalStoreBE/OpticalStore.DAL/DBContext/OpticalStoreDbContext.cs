@@ -418,6 +418,17 @@ public partial class OpticalStoreDbContext : DbContext
             entity.Property(e => e.BankName)
                 .HasMaxLength(255)
                 .HasColumnName("bank_name");
+            entity.Property(e => e.CancellationReason).HasColumnName("cancellation_reason");
+            entity.Property(e => e.OperationalHoldReason).HasColumnName("operational_hold_reason");
+            entity.Property(e => e.StatusBeforeHold)
+                .HasMaxLength(255)
+                .HasColumnName("status_before_hold");
+            entity.Property(e => e.CancelledAt)
+                .HasColumnType("timestamp(6) without time zone")
+                .HasColumnName("cancelled_at");
+            entity.Property(e => e.CancelledBy)
+                .HasMaxLength(255)
+                .HasColumnName("cancelled_by");
             entity.Property(e => e.ComboDiscountAmount)
                 .HasPrecision(12, 2)
                 .HasColumnName("combo_discount_amount");
