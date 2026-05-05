@@ -31,5 +31,4 @@ public partial class Combo
 
     public virtual ICollection<ComboItem> ComboItems { get; set; } = new List<ComboItem>();
 
-    public virtual ICollection<Order> Orders { get; set; } = new List<Order>();
 }

@@ -29,15 +29,9 @@ public partial class Order
 
     public decimal? ComboDiscountAmount { get; set; }
 
-    public string? ComboSnapshot { get; set; }
-
-    public string? ComboId { get; set; }
-
     public DateTime? DeliveredAt { get; set; }
 
-    public DateTime? ShippedAt { get; set; }
-
-    public string? ShipperId { get; set; }
+    public string? DeliveredImageUrl { get; set; }
 
     public string? AccountHolderName { get; set; }
 
@@ -51,9 +45,13 @@ public partial class Order
 
     public string? CancelledBy { get; set; }
 
-    public string? RecipientName { get; set; }
+    /// <summary>Lý do vận hành báo (tạm giữ).</summary>
+    public string? OperationalHoldReason { get; set; }
 
-    public virtual Combo? Combo { get; set; }
+    /// <summary>Trạng thái workflow trước khi chuyển sang ON_HOLD (để khôi phục).</summary>
+    public string? StatusBeforeHold { get; set; }
+
+    public string? RecipientName { get; set; }
 
     public virtual User? Customer { get; set; }
 

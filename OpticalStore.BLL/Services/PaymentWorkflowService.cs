@@ -24,12 +24,14 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
 
     private readonly OpticalStoreDbContext _dbContext;
     private readonly VnpayOptions _vnpayOptions;
+    private readonly IOrderEmailService _orderEmailService;
 
     // Khoi tao service thanh toan va nap cau hinh VNPay.
-    public PaymentWorkflowService(OpticalStoreDbContext dbContext, IOptions<VnpayOptions> vnpayOptions)
+    public PaymentWorkflowService(OpticalStoreDbContext dbContext, IOptions<VnpayOptions> vnpayOptions, IOrderEmailService orderEmailService)
     {
         _dbContext = dbContext;
         _vnpayOptions = vnpayOptions.Value;
+        _orderEmailService = orderEmailService;
     }
 
     // Tinh yeu cau thanh toan cho tung mat hang trong don.
@@ -201,10 +203,17 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
         var payment = await _dbContext.Payments
             .Include(x => x.Order!)
                 .ThenInclude(x => x.OrderItems)
+                    .ThenInclude(x => x.ProductVariant)
+                        .ThenInclude(x => x!.Product)
             .Include(x => x.Transactions)
             .FirstOrDefaultAsync(x => x.Id == paymentId, cancellationToken);
 
         if (payment is null)
+        {
+            return BuildCallbackResult(isBrowserReturn, false, "01", "Order not found", null, null);
+        }
+
+        if (payment.Order is null)
         {
             return BuildCallbackResult(isBrowserReturn, false, "01", "Order not found", null, null);
         }
@@ -252,12 +261,24 @@ public sealed class PaymentWorkflowService : IPaymentWorkflowService
             });
         }
 
-        if (isSuccess && payment.Order is not null)
+        var order = payment.Order!;
+
+        if (isSuccess)
         {
             ApplySuccessfulPaymentToOrder(payment);
         }
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (isSuccess)
+        {
+            var customerId = order.CustomerId;
+            var customer = await _dbContext.Users.FirstOrDefaultAsync(x => x.Id == customerId, cancellationToken);
+            if (customer is not null)
+            {
+                await _orderEmailService.SendOrderConfirmationEmailAsync(order, customer, order.OrderItems, cancellationToken);
+            }
+        }
 
         var redirectUrl = BuildFrontendRedirectUrl(isSuccess ? "/checkout/success" : "/checkout/failure", payment.OrderId, payment.Id, responseCode, transactionStatus);
         return BuildCallbackResult(isBrowserReturn, isSuccess, "00", "Confirm Success", payment.OrderId, payment.Id, redirectUrl);

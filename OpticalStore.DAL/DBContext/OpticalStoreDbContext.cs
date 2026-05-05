@@ -419,6 +419,10 @@ public partial class OpticalStoreDbContext : DbContext
                 .HasMaxLength(255)
                 .HasColumnName("bank_name");
             entity.Property(e => e.CancellationReason).HasColumnName("cancellation_reason");
+            entity.Property(e => e.OperationalHoldReason).HasColumnName("operational_hold_reason");
+            entity.Property(e => e.StatusBeforeHold)
+                .HasMaxLength(255)
+                .HasColumnName("status_before_hold");
             entity.Property(e => e.CancelledAt)
                 .HasColumnType("timestamp(6) without time zone")
                 .HasColumnName("cancelled_at");
@@ -428,10 +432,6 @@ public partial class OpticalStoreDbContext : DbContext
             entity.Property(e => e.ComboDiscountAmount)
                 .HasPrecision(12, 2)
                 .HasColumnName("combo_discount_amount");
-            entity.Property(e => e.ComboId)
-                .HasMaxLength(255)
-                .HasColumnName("combo_id");
-            entity.Property(e => e.ComboSnapshot).HasColumnName("combo_snapshot");
             entity.Property(e => e.CreatedAt)
                 .HasColumnType("timestamp(6) with time zone")
                 .HasColumnName("created_at");
@@ -441,6 +441,7 @@ public partial class OpticalStoreDbContext : DbContext
             entity.Property(e => e.DeliveredAt)
                 .HasColumnType("timestamp(6) without time zone")
                 .HasColumnName("delivered_at");
+            entity.Property(e => e.DeliveredImageUrl).HasColumnName("delivered_image_url");
             entity.Property(e => e.DeliveryAddress)
                 .HasMaxLength(255)
                 .HasColumnName("delivery_address");
@@ -462,22 +463,12 @@ public partial class OpticalStoreDbContext : DbContext
             entity.Property(e => e.RemainingAmount)
                 .HasPrecision(38, 2)
                 .HasColumnName("remaining_amount");
-            entity.Property(e => e.ShippedAt)
-                .HasColumnType("timestamp(6) without time zone")
-                .HasColumnName("shipped_at");
-            entity.Property(e => e.ShipperId)
-                .HasMaxLength(255)
-                .HasColumnName("shipper_id");
             entity.Property(e => e.Status)
                 .HasMaxLength(255)
                 .HasColumnName("status");
             entity.Property(e => e.TotalAmount)
                 .HasPrecision(38, 2)
                 .HasColumnName("total_amount");
-
-            entity.HasOne(d => d.Combo).WithMany(p => p.Orders)
-                .HasForeignKey(d => d.ComboId)
-                .HasConstraintName("fkpvv3pvyfjgqw0u029158kb6qr");
 
             entity.HasOne(d => d.Customer).WithMany(p => p.Orders)
                 .HasForeignKey(d => d.CustomerId)

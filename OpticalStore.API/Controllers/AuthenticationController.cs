@@ -33,19 +33,6 @@ public sealed class AuthController : ControllerBase
         });
     }
 
-    // Kiem tra token hien tai con hop le hay khong.
-    [HttpPost("introspect")]
-    [ProducesResponseType(typeof(ApiResponse<IntrospectResultDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<ApiResponse<IntrospectResultDto>>> Introspect([FromBody] TokenRequest request, CancellationToken cancellationToken)
-    {
-        var result = await _authService.IntrospectAsync(request.ToDto(), cancellationToken);
-
-        return Ok(new ApiResponse<IntrospectResultDto>
-        {
-            Result = result
-        });
-    }
-
     // Tao token moi bang refresh token.
     [HttpPost("refresh")]
     [ProducesResponseType(typeof(ApiResponse<AuthResultDto>), StatusCodes.Status200OK)]

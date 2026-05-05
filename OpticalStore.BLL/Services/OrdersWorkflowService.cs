@@ -14,8 +14,6 @@ namespace OpticalStore.BLL.Services;
 
 public sealed class OrdersWorkflowService : IOrdersWorkflowService
 {
-    private const decimal MaxDiscountPercent = 50m;
-    private const decimal MinFinalPrice = 10000m;
     private const string StatusPending = "PENDING";
     private const string StatusPaid = "PAID";
     private const string StatusConfirmed = "CONFIRMED";
@@ -26,19 +24,23 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     private const string StatusReadyToShip = "READY_TO_SHIP";
     private const string StatusDelivering = "DELIVERING";
     private const string StatusDelivered = "DELIVERED";
-
+    private const string StatusCompleted = "COMPLETED";
+    private const string StatusOnHold = "ON_HOLD";
     private readonly OpticalStoreDbContext _dbContext;
     private readonly INotificationService _notificationService;
+    private readonly IOrderEmailService _orderEmailService;
     private readonly ILogger<OrdersWorkflowService> _logger;
 
     // Khoi tao service don hang va gan cac dependency can thiet.
     public OrdersWorkflowService(
         OpticalStoreDbContext dbContext,
         INotificationService notificationService,
+        IOrderEmailService orderEmailService,
         ILogger<OrdersWorkflowService> logger)
     {
         _dbContext = dbContext;
         _notificationService = notificationService;
+        _orderEmailService = orderEmailService;
         _logger = logger;
     }
 
@@ -50,6 +52,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         {
             throw new AppException("USER_NOT_EXISTED", "User not found.", HttpStatusCode.NotFound);
         }
+        var normalizedPaymentMethod = NormalizePaymentMethod(paymentMethod);
 
         var order = new Order
         {
@@ -59,7 +62,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             RecipientName = request.RecipientName,
             PhoneNumber = request.PhoneNumber,
             CreatedAt = DateTime.UtcNow,
-            PaymentMethod = string.IsNullOrWhiteSpace(paymentMethod) ? null : paymentMethod,
+            PaymentMethod = normalizedPaymentMethod,
             BankName = request.BankInfo?.BankName,
             BankAccountNumber = request.BankInfo?.BankAccountNumber,
             AccountHolderName = request.BankInfo?.AccountHolderName
@@ -157,7 +160,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         var finalTotal = Math.Max(0m, total);
         var hasPreOrderItems = orderItems.Any(x => IsPreOrderOrderItemType(x.OrderItemType));
 
-        if (hasPreOrderItems && !string.Equals(paymentMethod?.Trim(), "VNPAY", StringComparison.OrdinalIgnoreCase))
+        if (hasPreOrderItems && !string.Equals(normalizedPaymentMethod, "VNPAY", StringComparison.OrdinalIgnoreCase))
         {
             throw new AppException(
                 "PREORDER_PAYMENT_METHOD_NOT_ALLOWED",
@@ -173,9 +176,34 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
         _dbContext.Orders.Add(order);
         _dbContext.OrderItems.AddRange(orderItems);
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex)
+        {
+            var dbMessage = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "Failed to create order due to DB update error. PaymentMethod={PaymentMethod}", normalizedPaymentMethod);
+
+            throw new AppException(
+                "ORDER_CREATE_DB_ERROR",
+                $"Không thể tạo đơn hàng do lỗi dữ liệu: {dbMessage}",
+                HttpStatusCode.BadRequest);
+        }
 
         await TryCreateOrderNotificationAsync(customer.Id, "Đơn hàng đã được tạo", $"Đơn hàng {order.Id} đã được tạo thành công.", cancellationToken);
+
+        if (!string.Equals(normalizedPaymentMethod, "VNPAY", StringComparison.OrdinalIgnoreCase))
+        {
+            try
+            {
+                await _orderEmailService.SendOrderConfirmationEmailAsync(order, customer, orderItems, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Order {OrderId} created but confirmation email failed.", order.Id);
+            }
+        }
 
         return await BuildOrderResponse(order.Id, cancellationToken);
     }
@@ -374,6 +402,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             "Đơn hàng đã bị hủy",
             $"Đơn hàng {order.Id} đã được hủy thành công.",
             cancellationToken);
+        await TrySendOrderCancelledEmailAsync(order, cancellationReason, cancellationToken);
 
         return await BuildOrderResponse(orderId, cancellationToken);
     }
@@ -387,10 +416,13 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             throw new AppException("ORDER_NOT_FOUND", "Order not found.", HttpStatusCode.NotFound);
         }
 
-        if (order.Status != "DELIVERED")
+        if (order.Status != StatusDelivered)
         {
             throw new AppException("INVALID_ORDER_STATUS", "Order cannot be completed in current status.", HttpStatusCode.BadRequest);
         }
+
+        order.Status = StatusCompleted;
+        await _dbContext.SaveChangesAsync(cancellationToken);
 
         return await BuildOrderResponse(orderId, cancellationToken);
     }
@@ -433,6 +465,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     public async Task<object> VerifyOrderAsync(string orderId, bool isApproved, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
 
         if (!isApproved)
         {
@@ -475,14 +508,6 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         };
     }
 
-    // Lua chon quay lui verify khong duoc ho tro trong lifecycle hien tai.
-    public Task<object> RevertVerifyOrderAsync(string orderId, CancellationToken cancellationToken = default)
-    {
-        _ = orderId;
-        _ = cancellationToken;
-        return Task.FromException<object>(new AppException("WORKFLOW_NOT_SUPPORTED", "Revert verification is not supported in current lifecycle.", HttpStatusCode.BadRequest));
-    }
-
     // Tu choi don hang o buoc ban hang.
     public Task<object> RejectOrderAsync(string orderId, string? reason, string cancelledByRole, CancellationToken cancellationToken = default)
     {
@@ -493,6 +518,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     public async Task<object> RequestStockAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
         var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
             x => x.OrderId == orderId
                 && x.OrderItemType != null
@@ -524,6 +550,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     public async Task<object> MarkStockReadyAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
         var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
             x => x.OrderId == orderId
                 && x.OrderItemType != null
@@ -556,6 +583,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     public async Task<object> StartProductionAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
         var hasPreOrderItems = await _dbContext.OrderItems.AnyAsync(
             x => x.OrderId == orderId
                 && x.OrderItemType != null
@@ -598,6 +626,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
     public async Task<object> FinishProductionAsync(string orderId, CancellationToken cancellationToken = default)
     {
         var order = await GetOrder(orderId, cancellationToken);
+        EnsureNotOnOperationalHold(order);
 
         if (order.Status != StatusInProduction)
         {
@@ -643,6 +672,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
         foreach (var order in orders)
         {
+            EnsureNotOnOperationalHold(order);
             var canMarkReady = order.Status is StatusPending or StatusPaid or StatusConfirmed
                 or StatusPreOrderConfirmed or StatusStockRequested or StatusStockReady
                 or StatusInProduction or "PROCESSING" or "PREPARING" or "PRODUCED";
@@ -672,6 +702,73 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         };
     }
 
+    // Vận hành báo lỗi — tạm dừng đơn ở giai đoạn xử lý kho / sản xuất / giao.
+    public async Task<object> ReportOperationalHoldAsync(string orderId, string reason, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+        {
+            throw new AppException("REASON_REQUIRED", "Hold reason is required.", HttpStatusCode.BadRequest);
+        }
+
+        var trimmed = reason.Trim();
+        if (trimmed.Length > 2000)
+        {
+            throw new AppException("REASON_TOO_LONG", "Hold reason exceeds maximum length.", HttpStatusCode.BadRequest);
+        }
+
+        var order = await GetOrder(orderId, cancellationToken);
+        if (order.Status == StatusOnHold)
+        {
+            throw new AppException("INVALID_ORDER_STATUS", "Order is already on hold.", HttpStatusCode.BadRequest);
+        }
+
+        if (!CanEnterOperationalHold(order.Status))
+        {
+            throw new AppException("INVALID_ORDER_STATUS", "Operational hold is not allowed in the current order status.", HttpStatusCode.BadRequest);
+        }
+
+        order.StatusBeforeHold = order.Status;
+        order.Status = StatusOnHold;
+        order.OperationalHoldReason = trimmed;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await TryNotifyOrderCustomerAsync(order,
+            "Đơn hàng tạm giữ",
+            $"Đơn hàng của bạn đang được xem xét tạm giữ trong quá trình xử lý. Lý do: {trimmed}",
+            cancellationToken);
+
+        return await BuildOrderResponse(orderId, cancellationToken);
+    }
+
+    // Khôi phục đơn ON_HOLD về trạng thái workflow trước khi tạm giữ.
+    public async Task<object> ResumeOperationalHoldAsync(string orderId, CancellationToken cancellationToken = default)
+    {
+        var order = await GetOrder(orderId, cancellationToken);
+        if (order.Status != StatusOnHold)
+        {
+            throw new AppException("INVALID_ORDER_STATUS", "Order is not on hold.", HttpStatusCode.BadRequest);
+        }
+
+        if (string.IsNullOrWhiteSpace(order.StatusBeforeHold))
+        {
+            throw new AppException("INVALID_HOLD_STATE", "Cannot resume: missing status before hold.", HttpStatusCode.BadRequest);
+        }
+
+        order.Status = order.StatusBeforeHold;
+        order.StatusBeforeHold = null;
+        order.OperationalHoldReason = null;
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+
+        await TryNotifyOrderCustomerAsync(order,
+            "Đơn hàng tiếp tục xử lý",
+            $"Đơn hàng {order.Id} đã được tiếp tục trong quy trình xử lý.",
+            cancellationToken);
+
+        return await BuildOrderResponse(orderId, cancellationToken);
+    }
+
     public async Task<object> UpdateItemStatusAsync(string orderItemId, string status, CancellationToken cancellationToken = default)
     {
         var item = await _dbContext.OrderItems.FirstOrDefaultAsync(x => x.Id == orderItemId, cancellationToken);
@@ -690,6 +787,8 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         {
             throw new AppException("ORDER_NOT_FOUND", "Order not found for this order item.", HttpStatusCode.NotFound);
         }
+
+        EnsureNotOnOperationalHold(order);
 
         if (order.Status != StatusInProduction)
         {
@@ -728,10 +827,13 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return await BuildOrderResponse(orderId, cancellationToken);
     }
 
-    public async Task<object> ConfirmDeliveredAsync(string orderId, CancellationToken cancellationToken = default)
+    public async Task<object> ConfirmDeliveredAsync(string orderId, string deliveredImageUrl, CancellationToken cancellationToken = default)
     {
         var order = await _dbContext.Orders
+            .Include(x => x.Customer)
             .Include(x => x.OrderItems)
+                .ThenInclude(x => x.ProductVariant!)
+                    .ThenInclude(x => x.Product!)
             .FirstOrDefaultAsync(x => x.Id == orderId, cancellationToken);
 
         if (order is null)
@@ -746,10 +848,16 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
 
         order.Status = StatusDelivered;
         order.DeliveredAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Unspecified);
+        order.DeliveredImageUrl = deliveredImageUrl;
 
         await ApplyInventoryOnOrderDeliveredAsync(order, cancellationToken);
 
         await _dbContext.SaveChangesAsync(cancellationToken);
+
+        if (order.Customer is not null)
+        {
+            await _orderEmailService.SendOrderDeliveredEmailAsync(order, order.Customer, order.OrderItems, cancellationToken);
+        }
 
         await TryNotifyOrderCustomerAsync(order,
             "Đơn hàng đã giao thành công",
@@ -822,45 +930,11 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             });
         }
 
-        const decimal comboDiscount = 0m;
-        var warnings = new List<object>();
-
-        var finalTotal = Math.Max(0m, originalTotal - comboDiscount);
-        var isValid = true;
-
-        var discountPercent = originalTotal == 0 ? 0 : (comboDiscount / originalTotal) * 100m;
-        if (discountPercent > MaxDiscountPercent)
-        {
-            isValid = false;
-            warnings.Add(new
-            {
-                type = "DISCOUNT_EXCEEDS_THRESHOLD",
-                message = "Discount exceeds threshold",
-                threshold = MaxDiscountPercent,
-                actualValue = discountPercent
-            });
-        }
-
-        if (finalTotal < MinFinalPrice && originalTotal > 0)
-        {
-            isValid = false;
-            warnings.Add(new
-            {
-                type = "BELOW_MIN_PRICE",
-                message = "Final total is below minimum price",
-                threshold = MinFinalPrice,
-                actualValue = finalTotal
-            });
-        }
-
         return new
         {
             originalTotal,
-            comboDiscount,
-            finalTotal,
-            isValid,
-            itemDetails = detailRows,
-            warnings
+            finalTotal = originalTotal,
+            itemDetails = detailRows
         };
     }
 
@@ -1016,6 +1090,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             paymentMethod = order.PaymentMethod,
             orderStatus = responseStatus,
             createdAt = order.CreatedAt,
+            deliveredImageUrl = order.DeliveredImageUrl,
             cancellationReason = order.CancellationReason,
             cancelledAt = order.CancelledAt,
             cancelledBy = order.CancelledBy,
@@ -1030,7 +1105,9 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 bankName = order.BankName,
                 bankAccountNumber = order.BankAccountNumber,
                 accountHolderName = order.AccountHolderName
-            }
+            },
+            operationalHoldReason = order.OperationalHoldReason,
+            statusBeforeHold = order.StatusBeforeHold
         };
     }
 
@@ -1043,11 +1120,13 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
             throw new AppException("ORDER_NOT_FOUND", "Order not found.", HttpStatusCode.NotFound);
         }
 
-        if (order.Status is not ("AWAITING_VERIFICATION" or StatusPending or StatusPaid))
+        if (order.Status != StatusOnHold && order.Status is not ("AWAITING_VERIFICATION" or StatusPending or StatusPaid))
         {
             throw new AppException("INVALID_ORDER_STATUS", "Order cannot be rejected in current status.", HttpStatusCode.BadRequest);
         }
 
+        order.StatusBeforeHold = null;
+        order.OperationalHoldReason = null;
         order.Status = "CANCELLED";
         ApplyCancellationMetadata(order, reason, cancelledByRole);
 
@@ -1080,6 +1159,7 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
                 ? $"Đơn hàng {order.Id} đã bị từ chối và hủy."
                 : $"Đơn hàng {order.Id} đã bị từ chối: {reason}",
             cancellationToken);
+        await TrySendOrderCancelledEmailAsync(order, reason, cancellationToken);
 
         return new
         {
@@ -1259,6 +1339,26 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         return available > 0 ? "IN_STOCK" : "PRE_ORDER";
     }
 
+    // Chuan hoa payment method de tranh luu gia tri khong hop le vao DB.
+    private static string? NormalizePaymentMethod(string? paymentMethod)
+    {
+        if (string.IsNullOrWhiteSpace(paymentMethod))
+        {
+            return "COD";
+        }
+
+        var normalized = paymentMethod.Trim().ToUpperInvariant();
+        return normalized switch
+        {
+            "VNPAY" => "VNPAY",
+            "COD" => "COD",
+            _ => throw new AppException(
+                "INVALID_PAYMENT_METHOD",
+                "Payment method không hợp lệ. Chỉ hỗ trợ COD hoặc VNPAY.",
+                HttpStatusCode.BadRequest)
+        };
+    }
+
     // Gui thong bao ve khach hang sau moi thay doi workflow.
     private async Task TryCreateOrderNotificationAsync(string recipientId, string title, string content, CancellationToken cancellationToken)
     {
@@ -1305,9 +1405,68 @@ public sealed class OrdersWorkflowService : IOrdersWorkflowService
         await TryCreateOrderNotificationAsync(order.CustomerId, title, content, cancellationToken);
     }
 
+    // Gui email huy don cho khach neu cau hinh email san sang.
+    private async Task TrySendOrderCancelledEmailAsync(Order order, string? cancellationReason, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(order.CustomerId))
+        {
+            return;
+        }
+
+        try
+        {
+            var customer = await _dbContext.Users.FirstOrDefaultAsync(x => x.Id == order.CustomerId, cancellationToken);
+            if (customer is null)
+            {
+                return;
+            }
+
+            var orderItems = await _dbContext.OrderItems
+                .Include(x => x.ProductVariant)
+                    .ThenInclude(x => x.Product)
+                .Include(x => x.Prescription)
+                .Where(x => x.OrderId == order.Id)
+                .ToListAsync(cancellationToken);
+
+            await _orderEmailService.SendOrderCancelledEmailAsync(order, customer, orderItems, cancellationReason, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send cancellation email for order {OrderId}.", order.Id);
+        }
+    }
+
     // Tra ve trang thai hien thi cho API, neu chua co thi tra string rong.
     private static string GetDisplayStatus(string? status, bool hasPreOrderItems, string? preOrderStatus = null)
     {
         return status ?? string.Empty;
+    }
+
+    private static void EnsureNotOnOperationalHold(Order order)
+    {
+        if (order.Status == StatusOnHold)
+        {
+            throw new AppException(
+                "ORDER_ON_HOLD",
+                "Order is on hold. Resume processing before continuing.",
+                HttpStatusCode.BadRequest);
+        }
+    }
+
+    private static bool CanEnterOperationalHold(string? status)
+    {
+        if (string.IsNullOrWhiteSpace(status))
+        {
+            return false;
+        }
+
+        return status == StatusConfirmed
+            || status == StatusPreOrderConfirmed
+            || status == StatusStockRequested
+            || status == StatusStockReady
+            || status == StatusInProduction
+            || status == "PROCESSING"
+            || status == "PREPARING"
+            || status == "PRODUCED";
     }
 }

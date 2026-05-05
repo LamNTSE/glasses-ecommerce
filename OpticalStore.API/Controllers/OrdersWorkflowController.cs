@@ -158,15 +158,6 @@ public sealed class OrdersWorkflowController : ControllerBase
         return Ok(new ApiResponse<object> { Result = result });
     }
 
-    // Quay lui thao tac verify khi workflow khong ho tro.
-    [HttpPut("sales/orders/{orderId}/revert-verify")]
-    [Authorize(Roles = "SALE,ADMIN,MANAGER")]
-    public async Task<ActionResult<ApiResponse<object>>> RevertVerifyOrder(string orderId, CancellationToken cancellationToken)
-    {
-        var result = await _ordersWorkflowService.RevertVerifyOrderAsync(orderId, cancellationToken);
-        return Ok(new ApiResponse<object> { Result = result });
-    }
-
     // Tu choi don hang theo ly do neu co.
     [HttpPut("sales/orders/{orderId}/reject")]
     [Authorize(Roles = "SALE,ADMIN")]
@@ -212,6 +203,25 @@ public sealed class OrdersWorkflowController : ControllerBase
         return Ok(new ApiResponse<object> { Result = result });
     }
 
+    [HttpPut("production/orders/{orderId}/report-hold")]
+    [Authorize(Roles = "OPERATION,ADMIN")]
+    public async Task<ActionResult<ApiResponse<object>>> ReportOperationalHold(
+        string orderId,
+        [FromQuery] string? reason,
+        CancellationToken cancellationToken)
+    {
+        var result = await _ordersWorkflowService.ReportOperationalHoldAsync(orderId, reason ?? string.Empty, cancellationToken);
+        return Ok(new ApiResponse<object> { Result = result });
+    }
+
+    [HttpPut("management/orders/{orderId}/resume-from-hold")]
+    [Authorize(Roles = "OPERATION,MANAGER,ADMIN,SALE")]
+    public async Task<ActionResult<ApiResponse<object>>> ResumeFromOperationalHold(string orderId, CancellationToken cancellationToken)
+    {
+        var result = await _ordersWorkflowService.ResumeOperationalHoldAsync(orderId, cancellationToken);
+        return Ok(new ApiResponse<object> { Result = result });
+    }
+
     // Cap nhat nhieu don sang san sang giao cung luc.
     [HttpPut("production/orders/ready-to-ship")]
     [Authorize(Roles = "OPERATION,ADMIN")]
@@ -242,9 +252,19 @@ public sealed class OrdersWorkflowController : ControllerBase
     // Xac nhan don da giao thanh cong.
     [HttpPatch("management/orders/{orderId}/confirm-delivered")]
     [Authorize(Roles = "OPERATION,ADMIN,SHIPPER")]
-    public async Task<ActionResult<ApiResponse<object>>> ConfirmDelivered(string orderId, CancellationToken cancellationToken)
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<ApiResponse<object>>> ConfirmDelivered(
+        string orderId,
+        IFormFile? image,
+        CancellationToken cancellationToken)
     {
-        var result = await _ordersWorkflowService.ConfirmDeliveredAsync(orderId, cancellationToken);
+        if (image is not { Length: > 0 })
+        {
+            throw new AppException("INVALID_DELIVERY_PROOF_FILE", "Delivery proof image is required.", HttpStatusCode.BadRequest);
+        }
+
+        var imageRelativePath = await DeliveryProofImageStorage.SaveAsync(image, _environment, cancellationToken);
+        var result = await _ordersWorkflowService.ConfirmDeliveredAsync(orderId, imageRelativePath, cancellationToken);
         return Ok(new ApiResponse<object> { Result = result });
     }
 
@@ -318,6 +338,7 @@ public sealed class OrdersWorkflowController : ControllerBase
     // Kiem tra gia ban va giam gia cua danh sach san pham.
     [HttpPost("api/orders/price-check")]
     [Authorize(Roles = "SALE,ADMIN,OPERATION")]
+    [ApiExplorerSettings(IgnoreApi = true)]
     public async Task<ActionResult<ApiResponse<object>>> PriceCheck([FromBody] PriceCheckRequest request, CancellationToken cancellationToken)
     {
         var result = await _ordersWorkflowService.PriceCheckAsync(request.ToDto(), cancellationToken);
@@ -331,13 +352,25 @@ public sealed class OrdersWorkflowController : ControllerBase
     // Phan tich payload JSON nhan tu form de tranh loi deserialize am thuc.
     private static T ParseJsonPayload<T>(string payload, string fieldName)
     {
-        var parsed = JsonSerializer.Deserialize<T>(payload, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-        if (parsed is null)
+        try
         {
-            throw new AppException("INVALID_PAYLOAD", $"Invalid {fieldName} payload.", HttpStatusCode.BadRequest);
-        }
+            var parsed = JsonSerializer.Deserialize<T>(
+                payload,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (parsed is null)
+            {
+                throw new AppException("INVALID_PAYLOAD", $"Invalid {fieldName} payload.", HttpStatusCode.BadRequest);
+            }
 
-        return parsed;
+            return parsed;
+        }
+        catch (JsonException ex)
+        {
+            throw new AppException(
+                "INVALID_PAYLOAD",
+                $"{fieldName} JSON không hợp lệ: {ex.Message}",
+                HttpStatusCode.BadRequest);
+        }
     }
 
     // Lay userId tu claim cua request hien tai.

@@ -72,20 +72,6 @@ public sealed class AuthService : IAuthService
         };
     }
 
-    // Kiem tra token hien tai con hop le hay khong.
-    public async Task<IntrospectResultDto> IntrospectAsync(TokenRequestDto request, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var principal = await ValidateTokenAsync(request.Token, isRefreshFlow: false, cancellationToken);
-            return new IntrospectResultDto { Valid = principal is not null };
-        }
-        catch
-        {
-            return new IntrospectResultDto { Valid = false };
-        }
-    }
-
     // Tao token moi sau khi xac minh refresh token.
     public async Task<AuthResultDto> RefreshAsync(TokenRequestDto request, CancellationToken cancellationToken = default)
     {

@@ -9,18 +9,30 @@ using OpticalStore.API.Swagger;
 using OpticalStore.BLL;
 using OpticalStore.BLL.Configuration;
 
-// Nạp .env trước khi tạo Configuration (ví dụ Vnpay__TmnCode, …)
+// Nạp .env trước khi tạo Configuration (ví dụ Vnpay__TmnCode, Email__*)
 var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 if (string.Equals(environmentName, "Development", StringComparison.OrdinalIgnoreCase))
 {
+	// 1) ưu tiên tìm theo cây thư mục hiện tại
 	Env.TraversePath().Load();
-}
 
-// Cwd khi F5/CLI thường là thư mục project API — tải rõ ràng (TraversePath đôi khi không thấy .env)
-var dotEnvCwd = Path.Combine(Directory.GetCurrentDirectory(), ".env");
-if (File.Exists(dotEnvCwd))
-{
-	Env.Load(dotEnvCwd);
+	// 2) fallback cho trường hợp chạy `dotnet run --project ...` từ workspace root
+	var cwd = Directory.GetCurrentDirectory();
+	var dotEnvCandidates = new[]
+	{
+		Path.Combine(cwd, ".env"),
+		Path.Combine(cwd, "OpticalStore.API", ".env"),
+		Path.Combine(cwd, "OpticalStoreBE", "OpticalStore.API", ".env"),
+	};
+
+	foreach (var dotEnvPath in dotEnvCandidates.Distinct(StringComparer.OrdinalIgnoreCase))
+	{
+		if (File.Exists(dotEnvPath))
+		{
+			Env.Load(dotEnvPath);
+			break;
+		}
+	}
 }
 
 var builder = WebApplication.CreateBuilder(args);
